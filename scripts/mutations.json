@@ -1,0 +1,44 @@
+[
+  {
+    "name": "wrong birthday product",
+    "file": "src/math/birthday.ts",
+    "anchor": "Math.log1p(-i/N)",
+    "replacement": "Math.log1p(-i/(N*2))",
+    "test": "birthday probability"
+  },
+  {
+    "name": "wrong truncation",
+    "file": "src/hash/truncate.ts",
+    "anchor": "Math.floor(x/2**((8-t%8)%8))",
+    "replacement": "Math.floor(x/2**((8-t%8)%8)) ^ 1",
+    "test": "table collision"
+  },
+  {
+    "name": "same predecessor",
+    "file": "src/attack/floyd.ts",
+    "anchor": "a:r.left,b:r.right",
+    "replacement": "a:r.left,b:r.left",
+    "test": "floyd collision"
+  },
+  {
+    "name": "negative forgery claim",
+    "file": "src/main.ts",
+    "anchor": "does not show the key holder approved this letter",
+    "replacement": "shows the key holder approved this letter",
+    "test": "meaningful forgery"
+  },
+  {
+    "name": "wrong full precompute count",
+    "file": "src/attack/tmto/tables.ts",
+    "anchor": "precompute:h.count,stored:map.size",
+    "replacement": "precompute:h.count+1,stored:map.size",
+    "test": "chained table preimages"
+  },
+  {
+    "name": "negative salt claim",
+    "file": "src/main.ts",
+    "anchor": "it does not stop guessing one user\u2019s password",
+    "replacement": "it stops guessing one user\u2019s password",
+    "test": "salted recovered preimages"
+  }
+]

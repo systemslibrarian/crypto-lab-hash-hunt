@@ -1,0 +1,3 @@
+export function birthday(N:number,q:number):{exact:number;upper:number;lower:number|null}{if(!Number.isInteger(N)||N<1||!Number.isInteger(q)||q<0)throw Error('Integer N >=1, q >=0 required');if(q>N)return {exact:1,upper:1,lower:null};let log=0;for(let i=1;i<q;i++)log+=Math.log1p(-i/N);const b=q*(q-1)/(2*N);return {exact:-Math.expm1(log),upper:Math.min(1,b),lower:b<=1?b/2:null};}
+export function rainbowPrediction(N:number,m:number,columns:number):number{let log=0;for(let j=0;j<columns;j++){log+=Math.log1p(-Math.min(m/N,1));m=N*(-Math.expm1(-m/N));}return -Math.expm1(log);}
+// [extension] point: multi-target preimage search needs a different target distribution.

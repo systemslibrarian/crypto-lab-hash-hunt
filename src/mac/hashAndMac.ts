@@ -1,0 +1,2 @@
+import {hashBytes,hex} from '../hash/truncate';
+export async function employer(){const key=await crypto.subtle.generateKey({name:'HMAC',hash:'SHA-256'},false,['sign','verify']);return {issue:async(message:string,t:number)=>new Uint8Array(await crypto.subtle.sign('HMAC',key,hashBytes(message,t))),verify:async(message:string,t:number,tag:Uint8Array<ArrayBuffer>)=>crypto.subtle.verify('HMAC',key,tag,hashBytes(message,t)),format:hex};}

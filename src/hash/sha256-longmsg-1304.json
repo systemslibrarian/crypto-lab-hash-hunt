@@ -1,0 +1,17 @@
+{
+  "test": "SHA-256 LongMsg",
+  "origin": "NIST CAVS 11.0, generated 2011-03-15 08:23:38, byte-oriented",
+  "source_url": "https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/shs/shabytetestvectors.zip",
+  "response_filename": "SHA256LongMsg.rsp",
+  "record": "first record under [L = 32]; uniquely identified by Len = 1304; no COUNT field",
+  "record_index_one_based": 1,
+  "len_bits": 1304,
+  "len_bytes": 163,
+  "msg_hex": "451101250ec6f26652249d59dc974b7361d571a8101cdfd36aba3b5854d3ae086b5fdd4597721b66e3c0dc5d8c606d9657d0e323283a5217d1f53f2f284f57b85c8a61ac8924711f895c5ed90ef17745ed2d728abd22a5f7a13479a462d71b56c19a74a40b655c58edfe0a188ad2cf46cbf30524f65d423c837dd1ff2bf462ac4198007345bb44dbb7b1c861298cdf61982a833afc728fae1eda2f87aa2c9480858bec",
+  "md_hex": "3c593aa539fdcdae516cdf2f15000f6634185c88f505b39775fb9ab137a10aa2",
+  "verification": "hashlib.sha256(bytes.fromhex(msg_hex)).hexdigest() equals md_hex",
+  "retrieved_from": "https://core.tcl-lang.org/tcltls/artifact/9a9ff814db",
+  "mirror_artifact": "9a9ff814db1683708d57c5daa0b2d6043e3c5c6737229504408a2ac45b8d3963",
+  "extraction": "Transcribed first record from web tool rendered response-file contents; source lines 16\u201325 identify header and record.",
+  "provenance_limitation": "Official NIST ZIP existence verified with web tool, but archive could not be downloaded locally (HTTP 403). Record obtained from preserved NIST response-file copy in TclTLS; no byte-for-byte comparison against current NIST ZIP or archive directory prefix is claimed."
+}
