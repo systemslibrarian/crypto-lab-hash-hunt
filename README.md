@@ -12,7 +12,7 @@ Built to the [Crypto Lab master template](https://github.com/systemslibrarian/cr
 
 1. **Birthday room:** fresh hash trials, an exact uniform-output probability model, and explicitly range-limited bounds.
 2. **Collision hunt:** birthday search or Floyd's two active walk registers; full digests, truncated bits and independent checks.
-3. **Meaningful forgery:** two piles or Floyd over an injective letter map. An isolated employer closure signs the dismissal's shortened digest; WebCrypto verifies that tag on the recommendation.
+3. **Meaningful forgery:** two piles or Floyd over an injective letter map. An isolated employer closure signs the dismissal's shortened digest; WebCrypto verifies that tag on the recommendation and rejects a modified tag. Word choices are highlighted; Floyd exposes recorded walk steps.
 4. **Chained tables:** actual Hellman/rainbow reductions, endpoint storage, regeneration, false alarms, coverage, online costs and reachable-target hit rates.
 5. **Salt experiment:** precompute before drawing fresh salts; distinguish bucket matches, verified preimages, and original passwords.
 
@@ -67,7 +67,7 @@ npm run test:mutations
 
 21 unit tests cover SHA-256, all truncation widths, RFC 4231's long-key/long-data HMAC example, Floyd predecessors, independently checked collisions, meaningful methods, chain inversion, salt timing and import boundaries. The exact 163-byte NIST CAVP LongMsg fixture and provenance are in `src/hash/sha256-longmsg-1304.json`. The official ZIP was inaccessible locally; a preserved NIST response file from TclTLS was independently checked with platform SHA-256. No current-ZIP comparison or coverage percentage is claimed.
 
-Seven browser claims use Node SHA-256 to recheck displayed inputs and recovered preimages. Six mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises real controls at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
+Eight browser claims use Node SHA-256 to recheck displayed inputs and recovered preimages. Eleven mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises real controls at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
 
 Pages, PRs and grouped Dependabot auto-merge use the entire gate; automated merges explicitly dispatch deployment.
 

@@ -40,5 +40,40 @@
     "anchor": "it does not stop guessing one user\u2019s password",
     "replacement": "it stops guessing one user\u2019s password",
     "test": "salted recovered preimages"
+  },
+  {
+    "name": "verifier compares one bit too few",
+    "file": "src/verify/verify.ts",
+    "anchor": "hash(a,t)===hash(b,t)",
+    "replacement": "hash(a,t-1)===hash(b,t-1)",
+    "test": "near miss verifier"
+  },
+  {
+    "name": "wrong letter rendered",
+    "file": "src/main.ts",
+    "anchor": "letterMarkup(r.b)+'</pre>",
+    "replacement": "letterMarkup(r.a)+'</pre>",
+    "test": "meaningful forgery"
+  },
+  {
+    "name": "false alarms become hits",
+    "file": "src/worker/tasks.ts",
+    "anchor": "method,hits,targets:xs.length",
+    "replacement": "method,hits:hits+falseAlarms,targets:xs.length",
+    "test": "chained table preimages"
+  },
+  {
+    "name": "bucket match becomes salted answer",
+    "file": "src/worker/tasks.ts",
+    "anchor": "valid=bucket&&verifyPreimage('salt:'+salt+'|'+domainMessage(guess!,password),y,t)",
+    "replacement": "valid=bucket&&(y>=0)",
+    "test": "salted recovered preimages"
+  },
+  {
+    "name": "MAC recomputation bypasses verify",
+    "file": "src/mac/hashAndMac.ts",
+    "anchor": "crypto.subtle.verify('HMAC',key,tag,hashBytes(message,t))",
+    "replacement": "Boolean(tag.length && (await crypto.subtle.sign('HMAC',key,hashBytes(message,t))).byteLength)",
+    "test": "meaningful forgery"
   }
 ]
