@@ -11,7 +11,7 @@ Built to the [Crypto Lab master template](https://github.com/systemslibrarian/cr
 ## Exhibits
 
 1. **Birthday room:** fresh hash trials, an exact uniform-output probability model, and explicitly range-limited bounds.
-2. **Collision hunt:** birthday search or Floyd's two active walk registers; full digests, truncated bits and independent checks.
+2. **Collision hunt:** a generic collision attack using birthday search or Floyd's two active walk registers; full digests, truncated bits and independent checks.
 3. **Meaningful forgery:** two piles or Floyd over an injective letter map. An isolated employer closure signs the dismissal's shortened digest; WebCrypto verifies that tag on the recommendation and rejects a modified tag. Word choices are highlighted; Floyd exposes recorded walk steps.
 4. **Chained tables:** actual Hellman/rainbow reductions, endpoint storage, regeneration, false alarms, coverage, online costs and reachable-target hit rates.
 5. **Salt experiment:** precompute before drawing fresh salts; distinguish bucket matches, verified preimages, and original passwords.
@@ -75,7 +75,7 @@ Pages, PRs and grouped Dependabot auto-merge use the entire gate; automated merg
 
 A measured hash calibration sets a 12–24-bit interaction cap. Searches also enforce time/evaluation limits; letter hashes can be slower. Counts exclude independent verification. Chain construction is capped at one million hashes. Timings describe this browser, not production-size SHA-256.
 
-Central accent/favicon/category and port confirmation remain pending. Port 4225 is provisional because the full sibling census was unavailable. The shared catalog is unchanged.
+The Crypto Lab catalog integration records this lab’s concept, level, source evidence and fleet automation. Playwright port 4225 is unique across all 223 registered configurations; strictPort is enforced and existing servers are never reused.
 
 ---
 
