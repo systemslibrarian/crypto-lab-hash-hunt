@@ -10,7 +10,7 @@ export async function run(name:string,args:Record<string,unknown>,progress:(n:un
  if(name==='salt'){const password=true,t=12,full=buildFull(t,password);const rows=[];for(let i=0;i<20;i++){const original=randomBelow(full.N),message=domainMessage(original,password),{salt,y}=freshSaltedTarget(message,t);const guess=full.map.get(y),bucket=guess!==undefined,valid=bucket&&verifyPreimage('salt:'+salt+'|'+domainMessage(guess!,password),y,t);const brute=exhaustive(y,t,password,salt);if(brute.x===null||!verifyPreimage('salt:'+salt+'|'+domainMessage(brute.x,password),y,t))throw Error('Salted verification failed');rows.push({salt,y,bucket,valid,original:message,precomputed:guess===undefined?null:domainMessage(guess,password),recovered:domainMessage(brute.x,password),originalRecovered:brute.x===original,evals:brute.evals});}return {rows,precompute:full.precompute,stored:full.stored,t};}
  if(name==='multicollision'){
   if(args.action==='enumerate'){
-   const chain=args.chain as MulticollisionChain,enumeration=enumerateMulticollision(chain,ENUMERATION_CAP),verification=verifyMulticollision(chain.forks,enumeration.messages,chain.bits,chain.h1Digest);
+   const chain=args.chain as MulticollisionChain,enumeration=enumerateMulticollision(chain,ENUMERATION_CAP),verification=verifyMulticollision(chain.forks,enumeration.messages,chain.bits,chain.h1Digest,enumeration.complete);
    if(!verification.valid)throw Error('Independent multicollision verification rejected the enumerated set');
    return {chain,enumeration,verification};
   }
@@ -21,7 +21,7 @@ export async function run(name:string,args:Record<string,unknown>,progress:(n:un
  if(name==='cascade'){
   const forks=Number(args.forks),mode=(args.mode==='whole'?'whole':'iterated') as H2Mode,verifiedProgress=(value:unknown)=>{const update=value as {phase?:string;fork?:Parameters<typeof verifyFork>[0]};if(update.phase==='forks'&&update.fork&&!verifyFork(update.fork,t))throw Error('Independent fork verification rejected a completed stage');progress(value);},result=cascade(t,forks,mode,verifiedProgress),forkChecks=result.chain.forks.map(fork=>verifyFork(fork,t));
   if(forkChecks.some(valid=>!valid))throw Error('Independent fork verification rejected the cascade chain');
-  const enumeration=enumerateMulticollision(result.chain,ENUMERATION_CAP),multicollisionVerification=verifyMulticollision(result.chain.forks,enumeration.messages,t,result.chain.h1Digest);
+  const enumeration=enumerateMulticollision(result.chain,ENUMERATION_CAP),multicollisionVerification=verifyMulticollision(result.chain.forks,enumeration.messages,t,result.chain.h1Digest,enumeration.complete);
   if(!multicollisionVerification.valid)throw Error('Independent multicollision verification rejected the cascade set');
   if(!result.pair)return {...result,forkChecks,multicollisionVerification,cascadeVerification:null};
   const cascadeVerification=verifyCascade(result.pair.a,result.pair.b,t,mode,result.pair.h1,result.pair.h2);

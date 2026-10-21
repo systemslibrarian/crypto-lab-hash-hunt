@@ -27,3 +27,11 @@ it('every enumerated message from random Joux chains has the same independently 
 it.each(['iterated','whole'] as const)('Joux cascade finds a distinct H1 and %s-H2 collision with exact cost parts',mode=>{const result=cascade(8,9,mode);expect(result.pair).not.toBeNull();const pair=result.pair!;expect(pair.a.blocks).not.toEqual(pair.b.blocks);expect(toyMd(pair.a.blocks,8,'h1')).toBe(toyMd(pair.b.blocks,8,'h1'));expect(h2Hash(pair.a.blocks,8,mode)).toBe(h2Hash(pair.b.blocks,8,mode));expect(verifyCascade(pair.a,pair.b,8,mode,pair.h1,pair.h2).valid).toBe(true);expect(result.h2Calls).toBe(result.candidateCount*(mode==='iterated'?10:1));expect(result.totalCalls).toBe(result.chain.h1Calls+result.h2Calls);});
 
 it('enumeration above 4096 labels and verifies a deterministic sample',()=>{const chain=chainCollisions(8,13),enumeration=enumerateMulticollision(chain),check=verifyMulticollision(chain.forks,enumeration.messages,8,chain.h1Digest);expect(enumeration.totalCount).toBe(8192);expect(enumeration.complete).toBe(false);expect(enumeration.messages).toHaveLength(4096);expect(check).toMatchObject({valid:true,verified:4096,distinct:4096});});
+
+it('independent multicollision checks bind every fork to its predecessor and every mask to its blocks',()=>{
+ const chain=chainCollisions(8,3),enumeration=enumerateMulticollision(chain);
+ const disconnected=chain.forks.map(f=>({...f}));[disconnected[0],disconnected[1]]=[disconnected[1],disconnected[0]];
+ expect(verifyMulticollision(disconnected,enumeration.messages,8,chain.h1Digest).valid).toBe(false);
+ const wrongMask=enumeration.messages.map(m=>({...m}));wrongMask[0].mask=1;
+ expect(verifyMulticollision(chain.forks,wrongMask,8,chain.h1Digest).valid).toBe(false);
+});

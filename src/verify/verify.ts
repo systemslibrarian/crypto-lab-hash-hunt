@@ -17,11 +17,15 @@ export function verifyMulticollision(
  messages:VerifiableMessage[],
  bits:number,
  expectedDigest:number,
+ complete=false,
 ):{valid:boolean;verified:number;distinct:number;paddingBlock:string}{
+ const linked=forks.length>0&&forks.every((fork,index)=>fork.stage===index+1&&fork.inputCv===(index===0?0:forks[index-1].nextCv));
+ const masksMatch=messages.every(message=>Number.isInteger(message.mask)&&message.mask>=0&&message.mask<2**forks.length&&message.blocks.length===forks.length&&message.blocks.every((block,index)=>block===((message.mask>>index)&1?forks[index].right:forks[index].left)));
+ const coverage=!complete||messages.length===2**forks.length;
  const digests=messages.map(message=>toyMd(message.blocks,bits,'h1'));
  const encodings=new Set(messages.map(message=>JSON.stringify(message.blocks)));
  return {
-  valid:forks.every(fork=>verifyFork(fork,bits))&&messages.length>0&&digests.every(digest=>digest===expectedDigest)&&encodings.size===messages.length,
+  valid:linked&&masksMatch&&coverage&&forks.every(fork=>verifyFork(fork,bits))&&messages.length>0&&digests.every(digest=>digest===expectedDigest)&&encodings.size===messages.length,
   verified:digests.filter(digest=>digest===expectedDigest).length,
   distinct:encodings.size,
   paddingBlock:lengthBlock(forks.length),

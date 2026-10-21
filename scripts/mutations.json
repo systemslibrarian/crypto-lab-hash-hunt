@@ -37,8 +37,8 @@
   {
     "name": "negative salt claim",
     "file": "src/main.ts",
-    "anchor": "it does not stop guessing one user\u2019s password",
-    "replacement": "it stops guessing one user\u2019s password",
+    "anchor": "it does not stop guessing one user’s password",
+    "replacement": "it stops guessing one user’s password",
     "test": "salted recovered preimages"
   },
   {
@@ -138,5 +138,12 @@
     "anchor": "const lengthPresent=check.paddingBlock===result.chain.paddingBlock,costAdvantage=result.naive.expectedCalls>result.totalCalls;",
     "replacement": "const lengthPresent=check.paddingBlock===result.chain.paddingBlock,costAdvantage=false&&result.naive.expectedCalls>result.totalCalls;",
     "test": "cascade pair independently collides under H1 and H2"
+  },
+  {
+    "name": "fork selector retires the chain",
+    "file": "src/main.ts",
+    "anchor": "},'#multi-n,#multi-b,#multi-mode');",
+    "replacement": "},'input,select,textarea');",
+    "test": "every selected fork stays inspectable"
   }
 ]

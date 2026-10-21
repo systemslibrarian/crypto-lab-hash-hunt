@@ -84,3 +84,11 @@ The Crypto Lab catalog integration records this lab’s concept, level, source e
 *One of the browser demos in the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
 
 *"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
+
+### Multicollision correction
+
+Choosing a fork to inspect no longer retires the chain; every fork remains flippable.
+The table prints choices in stage order, matching the displayed blocks. New searches
+retire the previous chain immediately. Independent verification now binds each fork
+to its predecessor and each message to its stated mask, and checks complete-set counts.
+Mutation replay reads structured test results and rejects crashes or setup failures.

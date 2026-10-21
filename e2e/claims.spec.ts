@@ -98,3 +98,22 @@ test('naive 2n-bit comparison uses the birthday exponent and measured rate',asyn
 test('multicollision evidence retires on a changed input but not a no-op',async({page})=>{
  await openMulti(page,9,5);await buildForks(page);const bits=page.locator('#multi-n');await bits.fill('9');await bits.dispatchEvent('input');await expect(page.locator('[data-verdict="multi-forks"]')).toBeVisible();await bits.fill('10');await expect(page.locator('[data-verdict="multi-forks"]')).toHaveCount(0);await expect(page.locator('#multi-out')).toContainText('Retired: inputs changed');expect(await page.locator('[hidden]').evaluateAll(nodes=>nodes.filter(node=>getComputedStyle(node).display!=='none').length)).toBe(0);
 });
+
+test('every selected fork stays inspectable and stage-first choices match the message blocks',async({page})=>{
+ await openMulti(page,8,4);await buildForks(page);
+ for(const fork of [2,3,4,1]){
+  await page.locator('#multi-flip-index').fill(String(fork));
+  await expect(page.locator('[data-verdict="multi-forks"]')).toBeVisible();
+  await page.locator('#multi-flip').click();
+  const evidence=page.locator('#multi-flip-evidence');await expect(evidence).toHaveAttribute('data-fork',String(fork));
+  const before=JSON.parse((await evidence.getAttribute('data-before-blocks'))!) as string[],after=JSON.parse((await evidence.getAttribute('data-after-blocks'))!) as string[];
+  expect(after.map((v,i)=>v!==before[i]?i+1:0).filter(Boolean)).toEqual([fork]);
+ }
+ await page.locator('#multi-enumerate').click();
+ await expect(page.locator('#multi-enumeration-evidence')).toBeVisible();
+ for(const row of await page.locator('[data-multi-message]').all()){
+  const mask=Number(await row.getAttribute('data-mask'));
+  const expected=Array.from({length:4},(_,i)=>String((mask>>i)&1)).join('');
+  await expect(row.locator('td').first()).toHaveText(expected);
+ }
+});

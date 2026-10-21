@@ -16,8 +16,8 @@ export function mount(title:string,subtitle:string,intro:string,why:string,exhib
  for(const b of app.querySelectorAll<HTMLButtonElement>('[data-tab]')){b.addEventListener('click',()=>activate(b.dataset.tab!));b.addEventListener('keydown',e=>{const index=exhibits.findIndex(x=>x.id===current);let next=index;if(e.key==='ArrowRight')next=(index+1)%exhibits.length;else if(e.key==='ArrowLeft')next=(index+exhibits.length-1)%exhibits.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=exhibits.length-1;else return;e.preventDefault();activate(exhibits[next].id);el('#tab-'+exhibits[next].id).focus();});}
  activate(exhibits[0].id);
 }
-export function retirement(panel:HTMLElement,out:HTMLElement,cancel:()=>void=()=>{}):()=>void {
- const controls=[...panel.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('input,select,textarea')];const previous=new Map(controls.map(c=>[c,c.value]));
+export function retirement(panel:HTMLElement,out:HTMLElement,cancel:()=>void=()=>{},selector='input,select,textarea'):()=>void {
+ const controls=[...panel.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>(selector)];const previous=new Map(controls.map(c=>[c,c.value]));
  const retire=()=>{cancel();if(out.textContent?.trim())out.innerHTML=verdict('warn','Retired: inputs changed','Run the experiment again with these inputs.');};
  for(const c of controls)c.addEventListener('input',()=>{if(previous.get(c)===c.value)return;previous.set(c,c.value);retire();});
  return retire;
