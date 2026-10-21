@@ -25,7 +25,7 @@
     "file": "src/main.ts",
     "anchor": "does not show the key holder approved this letter",
     "replacement": "shows the key holder approved this letter",
-    "test": "meaningful forgery"
+    "test": "meaningful forgery is a cross-type collision with a real accepted HMAC"
   },
   {
     "name": "wrong full precompute count",
@@ -37,8 +37,8 @@
   {
     "name": "negative salt claim",
     "file": "src/main.ts",
-    "anchor": "it does not stop guessing one user’s password",
-    "replacement": "it stops guessing one user’s password",
+    "anchor": "it does not stop guessing one user\u2019s password",
+    "replacement": "it stops guessing one user\u2019s password",
     "test": "salted recovered preimages"
   },
   {
@@ -53,7 +53,7 @@
     "file": "src/main.ts",
     "anchor": "letterMarkup(r.b)+'</pre>",
     "replacement": "letterMarkup(r.a)+'</pre>",
-    "test": "meaningful forgery"
+    "test": "meaningful forgery is a cross-type collision with a real accepted HMAC"
   },
   {
     "name": "false alarms become hits",
@@ -64,7 +64,7 @@
   },
   {
     "name": "bucket match becomes salted answer",
-    "file": "src/worker/tasks.ts",
+    "file": "src/salt/experiment.ts",
     "anchor": "valid=bucket&&verifyPreimage('salt:'+salt+'|'+domainMessage(guess!,password),y,t)",
     "replacement": "valid=bucket&&(y>=0)",
     "test": "salted recovered preimages"
@@ -74,7 +74,7 @@
     "file": "src/mac/hashAndMac.ts",
     "anchor": "crypto.subtle.verify('HMAC',key,tag,hashBytes(message,t))",
     "replacement": "Boolean(tag.length && (await crypto.subtle.sign('HMAC',key,hashBytes(message,t))).byteLength)",
-    "test": "meaningful forgery"
+    "test": "meaningful forgery is a cross-type collision with a real accepted HMAC"
   },
   {
     "name": "next fork reuses the prior chaining value",
@@ -128,7 +128,7 @@
   {
     "name": "negative concatenation claim is removed",
     "file": "src/main.ts",
-    "anchor": "Concatenating these two hashes does not double the collision work: a 2n-bit H1‖H2 here falls to about b·2^(n/2) compression calls with b ≈ n/2 forks.",
+    "anchor": "Concatenating these two hashes does not double the collision work: a 2n-bit H1\u2016H2 here falls to about b\u00b72^(n/2) compression calls with b \u2248 n/2 forks.",
     "replacement": "Limitation text removed by the mutation runner.",
     "test": "cascade pair independently collides under H1 and H2"
   },
@@ -145,5 +145,26 @@
     "anchor": "},'#multi-n,#multi-b,#multi-mode');",
     "replacement": "},'input,select,textarea');",
     "test": "every selected fork stays inspectable"
+  },
+  {
+    "name": "report same-type meaningful collision as success",
+    "file": "src/verify/verify.ts",
+    "anchor": "check.valid&&a.includes('Alice is dismissed')&&b.includes('I recommend Alice')",
+    "replacement": "check.valid&&a.includes('Alice is dismissed')",
+    "test": "same-type meaningful collision is rejected despite matching hashes"
+  },
+  {
+    "name": "stop Floyd at a same-type collision instead of retrying",
+    "file": "src/attack/meaningful.ts",
+    "anchor": "if(a.type===b.type){retries++;",
+    "replacement": "if(false&&a.type===b.type){retries++;",
+    "test": "Floyd displays real same-type retries before the meaningful forgery"
+  },
+  {
+    "name": "salts known before table build",
+    "file": "src/salt/experiment.ts",
+    "anchor": "const prepared:ReturnType<typeof choose>[]=[];",
+    "replacement": "const prepared:ReturnType<typeof choose>[]=Array.from({length:20},choose);",
+    "test": "actual salt draws occur only after precomputation has completed"
   }
 ]

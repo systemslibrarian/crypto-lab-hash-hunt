@@ -67,9 +67,9 @@ npm run test:e2e
 npm run test:mutations
 ```
 
-26 unit tests cover SHA-256, all truncation widths, RFC 4231's long-key/long-data HMAC example, Floyd predecessors, independently checked collisions, meaningful methods, chain inversion, salt timing, complete and sampled Joux fork enumeration, both H2 cascade modes, exact call accounting and import boundaries. The exact 163-byte NIST CAVP LongMsg fixture and provenance are in `src/hash/sha256-longmsg-1304.json`. The official ZIP was inaccessible locally; a preserved NIST response file from TclTLS was independently checked with platform SHA-256. No current-ZIP comparison or coverage percentage is claimed.
+34 executed unit cases cover SHA-256, all truncation widths, RFC 4231's long-key/long-data HMAC example, Floyd predecessors, independently checked collisions, meaningful methods, chain inversion, salt timing, complete and sampled Joux fork enumeration, both H2 cascade modes, exact call accounting and import boundaries. The exact 163-byte NIST CAVP LongMsg fixture and provenance are in `src/hash/sha256-longmsg-1304.json`. The official ZIP was inaccessible locally; a preserved NIST response file from TclTLS was independently checked with platform SHA-256. No current-ZIP comparison or coverage percentage is claimed.
 
-Seventeen browser claims use Node SHA-256 to recheck displayed inputs, recovered preimages, every fork transition, sampled multicollision messages, both H2 modes, the final H1‖H2 pair, cost sums and extrapolation. Twenty mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises every multicollision state at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
+Twenty-two browser claims use Node SHA-256 to recheck displayed inputs, recovered preimages, every fork transition, sampled multicollision messages, both H2 modes, the final H1‖H2 pair, cost sums and extrapolation. Twenty-four mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises every multicollision state at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
 
 Pages, PRs and grouped Dependabot auto-merge use the entire gate; automated merges explicitly dispatch deployment.
 
@@ -95,3 +95,21 @@ Mutation replay reads structured test results and rejects crashes or setup failu
 
 Cancellation in degraded mode is checked before computation starts and on every
 progress update or error, so a retired run cannot replace a newer result.
+
+## Deviations from the brief
+
+- **HH-2: retain the hardened mutation runner.** Restoring the base text-search runner would allow a timeout, crash or setup error to masquerade as a kill. The current structured-report validation remains. The repair also clears generated output and captures the baseline bundle hash immediately after an explicit clean build; browser artifact collection had left stale mutant chunks beside the active bundle. A kill still requires the named assertion to fail, a changed successful build, restoration to the original build hash and a passing restored test.
+- **HH-12: salted hits are measured, not forced to zero.** A twelve-bit table can accidentally return a valid salted preimage. The visible “TABLE USELESS FOR THIS BATCH” appears only when every table candidate fails verification; the recovery experiment reports the actual count. Under an ideal independent random-function model, a domain of N=4096 with M=2624 stored unsalted outputs has per-user accidental-success probability M(2N−1)/N³. The resulting probability of at least one hit among 20 users is about 0.624%, rather than the audit summary's 0.3%. The extra contribution comes from the table candidate sometimes being the originally sampled password. This is a model calculation, not a guaranteed or measured frequency.
+- **Existing accessibility oracles were not weakened.** The audit's condensed files retained the contrast/non-text algorithms. The full reference structure and comments are restored, and missing structural boot assertions now check list semantics, one main landmark, six tabs, the skip-link destination, default inputs, closed disclosures and absence of theme controls. The lab-specific state driver remains adapted to Hash Hunt.
+
+## Audit repair evidence
+
+HH-1 now has both a genuine same-type eight-bit collision control and a deterministic Floyd run with four actual same-type retries before the cross-type forgery. The page logs the rejected letter pairs, and browser tests hash those letters with Node SHA-256. Separate mutations bypass the semantic verifier and the retry step.
+
+The salt-timing test exercises the real inline fallback and observes the actual CSPRNG calls. Each salt must be drawn after the real table-build completion callback. A mutation creates the targets before construction, and must fail that test; this is distinct from the existing invalid-bucket-answer mutation. Table construction still has no access to salts. The experiment uses the full lookup table as described on the page.
+
+The full lookup is named Bcrypt Forge’s Scenario B; Hash Zoo, DNSSEC Chain, Feistel Forge and Grover have framed links. Non-byte-aligned controls expose the final-byte mask and measured cap. Explicit Hellman/rainbow start-point fixtures confirm that an index is not accepted as a preimage merely because it is a stored start.
+
+Counts are obtained with `npx vitest list --json`, `npm test` (which expands parameter rows to 34), `npx playwright test --list` (22 claims plus two accessibility drives), and the 24-entry `scripts/mutations.json`. No tests are skipped. Local browser runs can select an installed Chromium with `CHROMIUM_PATH`; the registered port, deployment workflow, header and theme pin are unchanged.
+
+Mutation restoration hashes the JavaScript files listed by each fresh Vite build manifest. Unreferenced files left by browser artifact collection are excluded; baseline, mutant and restored builds still have to satisfy every assertion and hash check.

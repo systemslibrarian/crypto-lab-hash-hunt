@@ -1,7 +1,13 @@
-// Composite-aware accessibility oracle adapted from crypto-lab-schnorr-forge (MIT, Paul Clark).
 import type { Page } from '@playwright/test';
 
-
+/**
+ * Composite-aware WCAG 1.4.3 contrast measurement from the Schnorr reference.
+ * It measures rendered text against composited backdrops, including CSS colour
+ * mixing, gradients, ancestor opacity and clipping. SVG underlays follow paint
+ * order. Generated text is checked separately by nontext.ts; gate.ts also runs
+ * this walk on painted aria-hidden content with its normal exemption lifted.
+ * Lab-specific state coverage is defined by a11y.spec.ts.
+ */
 
 export interface ContrastFailure {
   selector: string;
@@ -14,7 +20,22 @@ export interface ContrastFailure {
   ratio: number;
 }
 
-
+/**
+ * `within` narrows the walk to one subtree; `includeAriaHidden` lifts the
+ * accessibility-tree exemption for that walk.
+ *
+ * The default pair — whole page, `aria-hidden` skipped — matches axe's own
+ * boundary and is what `scan()` uses for the page at large.
+ *
+ * The second form exists because of a real gap. SC 1.4.3 is about what a reader
+ * SEES, and `aria-hidden` changes only what a reader HEARS, so painted text
+ * inside an `aria-hidden` subtree still has to clear its ratio — yet axe skips
+ * it and, by default, so does this walk. What this page hides is its
+ * verdict/stage/pill glyphs (✓ ✕ ⚠ ·), each painted in a semantic ink
+ * (`--ok-text`, `--bad-text`, `--alarm-text`) on its own `color-mix()` tint —
+ * the states this lab exists to show — so `scan()` calls this a second time as
+ * `auditContrast(page, '[aria-hidden="true"], [aria-hidden="true"] *', true)`.
+ */
 export async function auditContrast(
   page: Page,
   within = 'body *',
@@ -31,7 +52,22 @@ export async function auditContrast(
     const TRANSPARENT: RGBA = { r: 0, g: 0, b: 0, a: 0 };
     const WHITE: RGBA = { r: 255, g: 255, b: 255, a: 1 };
 
-    
+    /**
+     * Resolve ANY CSS colour to straight-alpha sRGB via a 1×1 canvas.
+     *
+     * A hand-rolled `rgba()` regex cannot resolve mixed colours. Chromium
+     * can return `color-mix()` directly from
+     * `getComputedStyle` unchanged rather than converting it to sRGB. A
+     * regex that only understands `rgb()/rgba()` sees `null` for every one of
+     * them and the walk then falls through to the wrong backdrop — which
+     * fabricates failures (dark-on-light read as dark-on-dark) and, far worse,
+     * could hide a real one. The 2D canvas is the browser's own colour
+     * pipeline: assigning `fillStyle` converts any valid CSS colour — oklab,
+     * color-mix, hwb, named, hex — to sRGB, and a painted pixel carries the
+     * straight alpha back. Invalid input (a gradient direction keyword fed in by
+     * mistake) is rejected by the two-sentinel check so it cannot masquerade as
+     * black.
+     */
     const canvas = document.createElement('canvas');
     canvas.width = 1;
     canvas.height = 1;
@@ -61,7 +97,7 @@ export async function auditContrast(
       return rgba;
     };
 
-    
+    /** Split on a separator char that sits at paren-nesting depth 0. */
     const splitTopLevel = (str: string, sep: string): string[] => {
       const out: string[] = [];
       let depth = 0;
@@ -80,7 +116,7 @@ export async function auditContrast(
       return out;
     };
 
-    
+    /** Standard source-over compositing of a (possibly translucent) src on dst. */
     const over = (src: RGBA, dst: RGBA): RGBA => {
       const a = src.a + dst.a * (1 - src.a);
       if (a === 0) return TRANSPARENT;
@@ -119,7 +155,10 @@ export async function auditContrast(
 
     const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
 
-    
+    /**
+     * Interpolate a gradient's stop list at fraction `t`, in premultiplied
+     * straight-alpha, the way the compositor blends a fade-to-`transparent`.
+     */
     const colorAt = (stops: Stop[], t: number): RGBA => {
       if (!stops.length) return TRANSPARENT;
       if (t <= stops[0].pos) return stops[0].color;
@@ -138,7 +177,7 @@ export async function auditContrast(
       return al === 0 ? TRANSPARENT : { r: pr / al, g: pg / al, b: pb / al, a: al };
     };
 
-    
+    /** Parse the colour-stop list of a gradient, normalising positions to 0..1. */
     const parseStops = (parts: string[]): Stop[] => {
       const raw: { color: RGBA; pos: number | null }[] = [];
       for (const part of parts) {
@@ -186,7 +225,24 @@ export async function auditContrast(
     const VERT = new Set(['top', 'bottom']);
     const HORZ = new Set(['left', 'right']);
 
-    
+    /**
+     * Evaluate one background-image layer at a document point.
+     *
+     * An earlier gate judged every gradient at its worst *stop*, assuming that
+     * stop covered the text wherever the text sat. That is right only for a
+     * gradient whose worst stop spans its element — elsewhere in this fleet a
+     * `linear-gradient` running the full height of a several-screen document
+     * put text near the top on a different surface than text near the bottom.
+     * So each gradient is *sampled* at the text's real location instead:
+     * linear by projecting onto the gradient line, radial by distance from the
+     * centre over the farthest-corner radius. A non-gradient layer (`url()`,
+     * `none`) is unmeasurable and paints nothing. This lab's stylesheet
+     * declares no gradient today — its translucency all arrives as
+     * `color-mix()`, which `resolve` handles as a flat colour — so this
+     * sampler is currently inert here. It is the fleet's paint model and stays
+     * whole: the first `linear-gradient` a redesign adds is measured on
+     * arrival rather than silently misread.
+     */
     const sampleLayer = (layer: string, rect: DOMRect, p: Point): RGBA => {
       if (!/gradient/.test(layer)) return TRANSPARENT;
       const inner = layer.slice(layer.indexOf('(') + 1, layer.lastIndexOf(')'));
@@ -245,7 +301,11 @@ export async function auditContrast(
       return colorAt(stops, clamp01(t));
     };
 
-    
+    /**
+     * The colour this element's own box paints at the text point: its
+     * background-color with every background-image layer sampled and composited
+     * in paint order (first-listed layer on top).
+     */
     const paintAt = (cs: CSSStyleDeclaration, rect: DOMRect, p: Point): RGBA => {
       let result = resolve(cs.backgroundColor) ?? TRANSPARENT;
       const bi = cs.backgroundImage;
@@ -258,19 +318,19 @@ export async function auditContrast(
       return result;
     };
 
-    
+    /** Do two border boxes share any painted area at all? */
     const intersects = (a: DOMRect, b: DOMRect): boolean =>
       Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) > 0 &&
       Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)) > 0;
 
-    
+    /** Does `a` sit entirely inside `b`? */
     const contains = (outer: DOMRect, inner: DOMRect): boolean =>
       inner.left >= outer.left - 0.5 &&
       inner.right <= outer.right + 0.5 &&
       inner.top >= outer.top - 0.5 &&
       inner.bottom <= outer.bottom + 0.5;
 
-    
+    /** Cache shared ancestor styles and rectangles for this stable DOM pass. */
     const styleCache = new Map<Element, CSSStyleDeclaration>();
     const styleOf = (el: Element): CSSStyleDeclaration => {
       let cs = styleCache.get(el);
@@ -290,7 +350,17 @@ export async function auditContrast(
       return r;
     };
 
-    
+    /**
+     * Every container that clips its overflow, with the box it clips to.
+     *
+     * An `overflow: auto` container paints only what falls inside that box.
+     * Content scrolled beyond it is not dimmed or partly drawn — it is absent
+     * from the frame, and asking what colour it sits on has no answer. Here
+     * that is only the `.seg` toggle's `overflow: hidden` corner trim and the
+     * currently-unused `.table-wrap { overflow-x: auto }` rule — this page
+     * wraps its long hex instead of scrolling it — but the collection is built
+     * from the live DOM, so a new scroller joins it without an edit here.
+     */
     const clippers = Array.from(document.querySelectorAll('body *')).filter((el) => {
       const cs = styleOf(el);
       return /auto|scroll|hidden|clip/.test(cs.overflowX + ' ' + cs.overflowY);
@@ -299,7 +369,11 @@ export async function auditContrast(
     const clippedAway = (el: Element, box: DOMRect): boolean =>
       clippers.some((c) => c !== el && c.contains(el) && !intersects(box, rectOf(c)));
 
-    
+    /**
+     * SVG has no `background-color`: shapes paint in document order, so the
+     * surface under a `<text>` is whichever earlier sibling shape lies beneath
+     * it. Composite those, innermost-last, before the ancestor walk starts.
+     */
     const svgUnderlay = (el: Element, box: DOMRect): RGBA => {
       let bg = TRANSPARENT;
       let sib = el.previousElementSibling;
@@ -332,7 +406,14 @@ export async function auditContrast(
       return bg;
     };
 
-    
+    /**
+     * Does this element's own `clip` / `clip-path` reduce it to zero area?
+     *
+     * `clip: rect(t, r, b, l)` applies only to absolutely positioned boxes and
+     * is what the classic `.sr-only` recipe uses; `clip-path: inset(50%)` is
+     * the modern spelling of the same trick. Either one at zero area means the
+     * compositor draws nothing, so there is no painted ink to measure.
+     */
     const clippedToNothing = (cs: CSSStyleDeclaration): boolean => {
       const clip = cs.clip;
       if (clip && clip !== 'auto') {
@@ -425,7 +506,12 @@ export async function auditContrast(
       return s;
     };
 
-    
+    /**
+     * WCAG 1.4.3 exempts text that is part of an *inactive* user-interface
+     * component, and axe skips disabled controls for the same reason. Honour
+     * that here so a deliberately dimmed disabled control is not reported as a
+     * failure the spec does not actually require fixing.
+     */
     const inactive = (el: Element): boolean => {
       let n: Element | null = el;
       while (n) {
@@ -436,7 +522,22 @@ export async function auditContrast(
       return false;
     };
 
-    
+    /**
+     * `aria-hidden` text is removed from the accessibility tree, so axe's own
+     * `color-contrast` rule skips it — and this arithmetic oracle exists to
+     * catch what axe *misses* among exposed text (gradients, opacity), not to be
+     * stricter than axe on decorative content. Honour the same boundary.
+     *
+     * The boundary cuts both ways and is a known gap: text that is
+     * `aria-hidden` but still painted is skipped by BOTH oracles. So what this
+     * lab hides was enumerated rather than assumed, and everything in it that
+     * carries CHARACTERS is measured for real — see `includeAriaHidden` and the
+     * `[aria-hidden="true"]` call in `gate.ts`'s `scan()`.
+     *
+     * Verdict glyphs can carry semantic ink even when hidden from assistive
+     * technology. The gate explicitly measures painted hidden text rather than
+     * assuming it is decorative or already covered by axe.
+     */
     const ariaHidden = (el: Element): boolean => {
       if (allowAriaHidden) return false;
       let n: Element | null = el;
@@ -447,12 +548,50 @@ export async function auditContrast(
       return false;
     };
 
-    
+    /**
+     * SVG renders character data only inside `<text>` / `<tspan>`. Text sitting
+     * directly in a `<g>`, `<svg>` or shape element is in the DOM but paints
+     * nothing, so it has no colour and no contrast requirement.
+     *
+     * This lab's only SVG is the shared header's two `aria-hidden` marks, neither
+     * of which carries text. The guard stays because the usual way the mistake
+     * arrives is a template literal: interpolating a string ARRAY into one makes
+     * JS join it with commas, leaving a run of "," text nodes inside whatever
+     * element wraps it — and inside a `<g>` those render nothing, while a walk
+     * that measured them would report a 1:1 failure describing ink that was
+     * never laid down.
+     */
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const nonRenderingSvgText = (el: Element): boolean =>
       el.namespaceURI === SVG_NS && !['text', 'tspan'].includes(el.tagName.toLowerCase());
 
-    
+    /**
+     * The CANVAS background — what is painted behind everything.
+     *
+     * The ancestor walk is geometry-aware, which is right for ordinary boxes: a
+     * parent whose border box does not overlap the text paints nothing behind
+     * it. Applied to the ROOT it is wrong, and wrong in the direction that
+     * FABRICATES failures. CSS propagates the root element's background to the
+     * canvas and paints it over the whole canvas regardless of the root's own
+     * box (CSS Backgrounds 3, "The Canvas Background"); if the root's own
+     * background is transparent the value is taken from `<body>` instead.
+     *
+     * The failure this prevents is not hypothetical — it cost a run elsewhere in
+     * this fleet. A lab that sets `html, body { height: 100% }` has both boxes
+     * exactly one viewport tall while the document runs several viewports long,
+     * so every element below the fold intersects neither, the walk ends with a
+     * transparent backdrop, and it falls through to WHITE. In a dark theme that
+     * reports muted footer text against a white page that does not exist — 34 of
+     * 38 findings in one run elsewhere in this fleet — and it can mask a real
+     * failure in the other direction just as easily.
+     *
+     * Whether it is a no-op here depends on declarations that are easy to
+     * change and easy to miss, which is the argument for keeping it: this page
+     * runs six exhibits and many screens deep, so the day a `height: 100%`
+     * appears on `html` or `body`, everything below the first screen would
+     * report against a white page that does not exist — in a lab whose default
+     * dark canvas is near-black.
+     */
     const canvasBackground = ((): RGBA => {
       const rootCs = styleOf(document.documentElement);
       const rootRect = rectOf(document.documentElement);
@@ -553,7 +692,7 @@ export async function auditContrast(
   }, [within, includeAriaHidden] as [string, boolean]);
 }
 
-
+/** Render failures as short strings so an assertion diff is readable. */
 export function formatContrastFailures(failures: ContrastFailure[]): string[] {
   return failures.map(
     (f) =>

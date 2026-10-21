@@ -124,3 +124,20 @@ test('every selected fork stays inspectable and stage-first choices match the me
   await expect(row.locator('td').first()).toHaveText(expected);
  }
 });
+
+test('same-type meaningful collision is rejected despite matching hashes',async({page})=>{
+ await boot(page);await page.getByRole('tab',{name:/Meaningful forgery/}).click();await page.locator('#same-type-check').click();const a=(await page.locator('[data-same-a]').textContent())!,b=(await page.locator('[data-same-b]').textContent())!;expect(a).not.toBe(b);expect(shortened(a,8)).toBe(shortened(b,8));expect(a).toContain('Alice is dismissed');expect(b).toContain('Alice is dismissed');expect(await page.locator('[data-verdict=same-type]').innerText()).toContain('SAME-TYPE REJECTED');
+});
+test('Floyd displays real same-type retries before the meaningful forgery',async({page})=>{
+ await page.addInitScript(()=>{(window as any).Worker=class{constructor(){throw Error('Exercise inline fallback')}};let seed=0;const original=crypto.getRandomValues.bind(crypto);crypto.getRandomValues=((a:any)=>{if(a instanceof Uint8Array&&a.length===8){a.fill(0);a[0]=seed++;return a}return original(a)}) as typeof crypto.getRandomValues});
+ await boot(page);await page.getByRole('tab',{name:/Meaningful forgery/}).click();await page.locator('#t').fill('8');await page.locator('#meaning-method').selectOption('floyd');await page.locator('#forge').click();await expect.poll(()=>page.locator('#meaning-out .verdict').count()).toBeGreaterThan(0);expect(await page.locator('[data-verdict=forgery]').count()).toBe(1);
+ const retries=page.locator('[data-retry]');expect(await retries.count()).toBe(4);for(const retry of await retries.all()){const a=(await retry.locator('[data-retry-a]').textContent())!,b=(await retry.locator('[data-retry-b]').textContent())!;expect(a).not.toBe(b);expect(shortened(a,8)).toBe(shortened(b,8));expect(a.includes('dismissed')).toBe(b.includes('dismissed'))}await collision(page);
+});
+test('actual salt draws occur only after precomputation has completed',async({page})=>{
+ await page.addInitScript(()=>{(window as any).Worker=class{constructor(){throw Error('Exercise inline fallback')}};const original=crypto.getRandomValues.bind(crypto);(window as any).__saltPhases=[];crypto.getRandomValues=((a:any)=>{if(a instanceof Uint8Array&&a.length===16)(window as any).__saltPhases.push(document.querySelector<HTMLElement>('#salt-out')?.dataset.saltPhase??'unstarted');return original(a)}) as typeof crypto.getRandomValues});
+ await boot(page);await page.getByRole('tab',{name:/Salt experiment/}).click();await page.locator('#salt').click();await expect(page.locator('[data-verdict=salt-negative]')).toBeVisible();const observed=await page.evaluate(()=>(window as any).__saltPhases);expect(observed).toHaveLength(20);expect(observed).toEqual(Array(20).fill('precompute-complete'));
+});
+test('partial-byte mask tooltip and required related labs are present',async({page})=>{
+ await boot(page);for(const slug of ['hash-zoo','dnssec-chain','feistel-forge','grover'])expect(await page.locator(`a[href="https://systemslibrarian.github.io/crypto-lab-${slug}/"]`).count()).toBe(1);
+ await page.getByRole('tab',{name:/Collision hunt/}).click();await page.locator('#t').fill('9');expect(await page.locator('#t').getAttribute('title')).toContain('mask 0x80');expect(await page.locator('#t').getAttribute('title')).toContain('Measured cap:');await page.getByRole('tab',{name:/Chained tables/}).click();expect(await page.locator('#panel').innerText()).toContain('Bcrypt Forge’s Scenario B');
+});

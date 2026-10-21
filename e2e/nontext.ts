@@ -1,7 +1,49 @@
-// Composite-aware accessibility oracle adapted from crypto-lab-schnorr-forge (MIT, Paul Clark).
 import type { Page } from '@playwright/test';
 
-
+/**
+ * WCAG 1.4.11 (Non-text Contrast) and 1.4.3 for GENERATED CONTENT.
+ *
+ * These are the two failure classes this fleet's gates could not see at all.
+ * `axe` has no rule for either. The arithmetic contrast walk in `contrast.ts`
+ * measures *text nodes*, so it cannot reach a control's boundary and cannot
+ * reach a `::before`/`::after` glyph, because a pseudo-element is not an
+ * element and owns no text node.
+ *
+ * The driver measures controls and generated text in each reachable state.
+ * It evaluates the painted result rather than trusting stylesheet tokens or
+ * assuming that an inherited border remains visible after state overrides.
+ *
+ * TWO SEPARATE CHECKS LIVE HERE.
+ *
+ * 1. CONTROL BOUNDARIES, 3:1. A control has to be distinguishable from what
+ *    surrounds it. The rule is deliberately narrow to stay useful: an element
+ *    is only judged if it is *trying* to draw itself as a control — it has an
+ *    own background, or a border, or an outline. A plain text link carries its
+ *    own identification and is not flagged.
+ *
+ *    Then either delineator will do, because either is enough for a sighted
+ *    reader to find the edge:
+ *      - the FILL against the surface just outside the element, or
+ *      - the BORDER against that outside surface (a border is only a boundary
+ *        if you can see it against what is beyond it).
+ *    An element passes if either clears 3:1. It fails only when neither does,
+ *    which is the case where the control genuinely dissolves into its panel.
+ *
+ * 2. GENERATED CONTENT, 4.5:1 (3:1 for large). `getComputedStyle(el, '::before')`
+ *    reports the pseudo's `content`, `color`, `background` and font, so the ink
+ *    is knowable; what is not knowable is its box, because a pseudo-element has
+ *    no `getBoundingClientRect`. It is measured against its host's composited
+ *    backdrop, which is right for the overwhelmingly common case of a glyph
+ *    painted inside its host. That approximation is stated rather than hidden:
+ *    an absolutely-positioned pseudo that escapes its host is measured against
+ *    the wrong surface, and `escaped` is reported so triage can see it.
+ *
+ * Both checks reuse the composite model from `contrast.ts` — translucent
+ * colours over a geometry-aware ancestor walk, with the root's canvas
+ * background beneath — because a control's fill is usually an `rgba()` or a
+ * `color-mix()` over a panel that is itself translucent, and reading the
+ * declared value would measure something the page never paints.
+ */
 
 export interface NonTextFailure {
   kind: 'control-boundary' | 'generated-content';
@@ -95,7 +137,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       return out;
     };
 
-    
+    /** Standard source-over compositing of a (possibly translucent) src on dst. */
     const over = (src: RGBA, dst: RGBA): RGBA => {
       const a = src.a + dst.a * (1 - src.a);
       if (a === 0) return TRANSPARENT;
@@ -134,7 +176,10 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
 
     const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
 
-    
+    /**
+     * Interpolate a gradient's stop list at fraction `t`, in premultiplied
+     * straight-alpha, the way the compositor blends a fade-to-`transparent`.
+     */
     const colorAt = (stops: Stop[], t: number): RGBA => {
       if (!stops.length) return TRANSPARENT;
       if (t <= stops[0].pos) return stops[0].color;
@@ -153,7 +198,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       return al === 0 ? TRANSPARENT : { r: pr / al, g: pg / al, b: pb / al, a: al };
     };
 
-    
+    /** Parse the colour-stop list of a gradient, normalising positions to 0..1. */
     const parseStops = (parts: string[]): Stop[] => {
       const raw: { color: RGBA; pos: number | null }[] = [];
       for (const part of parts) {
@@ -201,7 +246,23 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
     const VERT = new Set(['top', 'bottom']);
     const HORZ = new Set(['left', 'right']);
 
-    
+    /**
+     * Evaluate one background-image layer at a document point.
+     *
+     * An earlier gate judged every gradient at its worst *stop*, assuming that
+     * stop covered the text wherever the text sat. That is right only for a
+     * gradient whose worst stop spans its element — elsewhere in this fleet a
+     * full-height `linear-gradient` on `body` put controls near the top of a
+     * several-screen document on a different surface than controls near the
+     * bottom. So each gradient is *sampled* at the point being judged instead:
+     * linear by projecting onto the gradient line, radial by distance from the
+     * centre over the farthest-corner radius. A non-gradient layer (`url()`,
+     * `none`) is unmeasurable and paints nothing. This lab's stylesheet
+     * declares no gradient today — every fill is flat hex or `color-mix()`,
+     * which `resolve` handles as a flat colour — so this sampler is currently
+     * inert here; it is the fleet's shared paint model and stays whole so the
+     * first gradient a redesign adds is measured on arrival.
+     */
     const sampleLayer = (layer: string, rect: DOMRect, p: Point): RGBA => {
       if (!/gradient/.test(layer)) return TRANSPARENT;
       const inner = layer.slice(layer.indexOf('(') + 1, layer.lastIndexOf(')'));
@@ -260,7 +321,11 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       return colorAt(stops, clamp01(t));
     };
 
-    
+    /**
+     * The colour this element's own box paints at the text point: its
+     * background-color with every background-image layer sampled and composited
+     * in paint order (first-listed layer on top).
+     */
     const paintAt = (cs: CSSStyleDeclaration, rect: DOMRect, p: Point): RGBA => {
       let result = resolve(cs.backgroundColor) ?? TRANSPARENT;
       const bi = cs.backgroundImage;
@@ -273,19 +338,29 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       return result;
     };
 
-    
+    /** Do two border boxes share any painted area at all? */
     const intersects = (a: DOMRect, b: DOMRect): boolean =>
       Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) > 0 &&
       Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)) > 0;
 
-    
+    /** Does `a` sit entirely inside `b`? */
     const contains = (outer: DOMRect, inner: DOMRect): boolean =>
       inner.left >= outer.left - 0.5 &&
       inner.right <= outer.right + 0.5 &&
       inner.top >= outer.top - 0.5 &&
       inner.bottom <= outer.bottom + 0.5;
 
-    
+    /**
+     * Style and geometry are memoised per element for one pass.
+     *
+     * A driven pass here walks six tabpanels, and the expensive part is the
+     * BIP-340 vectors panel: nineteen `.kat-item` disclosures, each with a
+     * summary pill and, once opened, five hex fields and a hand-off button —
+     * all siblings re-walking the same ancestors up to `<body>`. Without the
+     * caches the pass re-reads the same computed styles and rects tens of
+     * thousands of times. Nothing mutates the DOM during the pass, so the
+     * cached values cannot go stale.
+     */
     const styleCache = new Map<Element, CSSStyleDeclaration>();
 
     // Declared by the spliced paint core; see mknontext.py.
@@ -306,11 +381,28 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
     void contains;
     void styleCache;
 
-    
+    /**
+     * An element's own painted background AT A POINT — gradients included.
+     *
+     * The first version of this read `background-color` alone, and that is not
+     * what a page paints. Elsewhere in this fleet a lab reported `rgba(0,0,0,0)`
+     * for both `html` and `body` because its dark canvas was two radial
+     * gradients; the walk therefore found nothing opaque, fell through to WHITE,
+     * and reported a bright cyan disclosure triangle at 3.95:1 against a page
+     * that is actually near-black. The tell was that the number came out
+     * IDENTICAL in both themes — a ratio that cannot depend on the theme is not
+     * measuring the theme. This page paints a flat `var(--bg)` LONGHAND on
+     * both `html` and `body` — `style.css` says in as many words that the
+     * longhand is there because axe/WebKit miss the shorthand — so the root
+     * resolves on the first try and the `<body>` fallback is dormant. Both
+     * halves stay because either declaration is one refactor away from
+     * vanishing. The gradient-aware sampler is borrowed from `contrast.ts`
+     * wholesale rather than approximated a second time.
+     */
     const ownPaint = (cs: CSSStyleDeclaration, rect: DOMRect, p: Point): RGBA =>
       paintAt(cs, rect, p);
 
-    
+    /** The canvas background, which paints beyond the root's own box. */
     const canvasBackground = ((): RGBA => {
       const rootRect = rectOf(document.documentElement);
       const mid: Point = { x: rootRect.left + rootRect.width / 2, y: rootRect.top + rootRect.height / 2 };
@@ -324,7 +416,12 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       });
     })();
 
-    
+    /**
+     * Composite what is painted behind `el`, starting from `from`.
+     *
+     * Geometry-aware for the same reason `contrast.ts` is: an ancestor whose
+     * border box does not contain the sample point paints nothing there.
+     */
     const backdropFrom = (from: Element | null, p: Point): RGBA => {
       let acc: RGBA = TRANSPARENT;
       let node: Element | null = from;

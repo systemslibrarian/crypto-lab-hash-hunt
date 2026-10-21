@@ -1,4 +1,4 @@
-// Gate machinery copied from crypto-lab-schnorr-forge; setup checks structure only.
+// Adapted from crypto-lab-schnorr-forge: unchanged scan/oracle machinery; Hash Hunt setup and state driver.
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { auditContrast, formatContrastFailures } from './contrast';
@@ -7,12 +7,40 @@ import { NONTEXT_BASELINE } from './nontext-baseline';
 
 export const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-
+/** A phone-width viewport, for the WCAG 1.4.10 reflow half of the gate. */
 export const NARROW = { width: 320, height: 800 };
 
+/**
+ * Shared WCAG machinery adapted from the Schnorr reference.
+ * Drivers exercise reachable states at desktop and 320px, with reduced motion
+ * requested through the browser and verified in the page. They do not inject
+ * styles or force hidden panels visible. Each completed state is scanned.
+ * Axe violations and incomplete results are checked alongside independent
+ * text contrast, non-text contrast, generated-content and reflow oracles.
+ */
 
-
-
+/**
+ * Wait for every running animation and transition to drain.
+ *
+ * Two rAFs are not enough. A transition sampled mid-flight has a colour that
+ * exists in no state of the page, and axe will happily report it: elsewhere in
+ * this fleet that produced a phantom 2.00:1 failure on a button whose settled
+ * ratio is 9:1. Transitions also drain in waves rather than in one batch, so a
+ * poll for "nothing running right now" can exit through a gap between waves —
+ * hence six consecutive quiet frames rather than one.
+ *
+ * Bounded three ways, because a gate that can hang is a gate nobody runs:
+ * animations that never finish (`iterations: Infinity`) are excluded from the
+ * quiescence test rather than waited on, a wall-clock budget inside the page
+ * gives up and proceeds, and Playwright's own timeout is the backstop.
+ *
+ * Under the reduced motion this gate asserts, `style.css`'s reduced-motion
+ * block cancels `.panel` / `.reveal` animations and every transition, so
+ * `getAnimations()` is normally empty and this returns on the sixth frame. It
+ * stays because the shared top bar's `.cl-btn` transitions are declared
+ * OUTSIDE the lab's `@media` block — `* { transition: none !important }` wins
+ * today, but that is a property of the current stylesheet, not of the page.
+ */
 export async function settle(page: Page, budgetMs = 4000): Promise<void> {
   await page.waitForFunction(
     (budget: number) => {
@@ -39,7 +67,17 @@ export async function settle(page: Page, budgetMs = 4000): Promise<void> {
   );
 }
 
-
+/**
+ * Assert that reduced motion left the page visible, not merely un-animated.
+ *
+ * The failure mode this guards against is an element whose only route to its
+ * visible state is an animation, in a stylesheet whose reduced-motion block
+ * cancels that animation without restoring its end state. Check measured
+ * opacity so an animation-dependent element cannot silently disappear.
+ *
+ * `aria-hidden` subtrees are excluded; what this lab hides is decorative
+ * verdict/pill glyphs beside their own words — see `contrast.ts`.
+ */
 async function expectNotBlank(page: Page, label: string): Promise<void> {
   const invisible = await page.evaluate(() => {
     const out: string[] = [];
@@ -68,7 +106,13 @@ async function expectNotBlank(page: Page, label: string): Promise<void> {
   expect(invisible, `no visible text may render at opacity 0 in state: ${label}`).toEqual([]);
 }
 
-
+/**
+ * Uncaught page errors and console errors, collected from the moment the page
+ * is created. Every panel here renders synchronously at first activation, so a
+ * renderer that throws leaves that tabpanel EMPTY — and an empty region is
+ * exactly what a scan reports as perfectly accessible. Attach before `boot`,
+ * assert after the drive.
+ */
 export function watchPageErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -78,7 +122,7 @@ export function watchPageErrors(page: Page): string[] {
   return errors;
 }
 
-
+/** Check the rendered landmark roles, including implicit header semantics. */
 export async function assertSingleBanner(page: Page): Promise<void> {
   const banners = await page.evaluate(() => {
     const scoped = new Set(['MAIN', 'ARTICLE', 'ASIDE', 'NAV', 'SECTION']);
@@ -94,7 +138,10 @@ export async function assertSingleBanner(page: Page): Promise<void> {
   expect(banners, 'exactly one banner landmark').toBe(1);
 }
 
-
+/**
+ * Explicit roles on lists must preserve list semantics and have children.
+ * Inspect the rendered DOM so roles assigned by script are included.
+ */
 export async function assertListSemantics(page: Page): Promise<void> {
   const broken = await page.$$eval('ul[role], ol[role]', (els) =>
     els
@@ -110,19 +157,76 @@ export async function assertListSemantics(page: Page): Promise<void> {
   ).toEqual([]);
 }
 
-
-
-export async function boot(page: Page, _theme='dark'): Promise<void> {
- await page.emulateMedia({reducedMotion:'reduce'});
- await page.goto('./');
- await expect(page.locator('h1')).toHaveCount(1);
- await expect(page.locator('#app .panel')).toHaveCount(1);
- await expect(page.locator('#app .panel')).not.toBeEmpty();
- await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
- expect(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
- await assertSingleBanner(page);
+/**
+ * Load the page in a known theme with reduced motion actually in effect, and
+ * assert the content every scan relies on is really on the page — including
+ * the lab's DEFAULTS, which are never assumed.
+ *
+ * `test.use({ reducedMotion })` silently does nothing on Playwright 1.61.1, so
+ * the emulation is applied imperatively BEFORE the navigation and then
+ * *asserted* from inside the page. Nothing in this lab's JS branches on
+ * `matchMedia`, but the CSS reduced-motion block is the only thing standing
+ * between a scan and the mid-flight `fade`/`reveal` opacities, so the
+ * assertion is still the difference between scanning the reduced-motion
+ * rendering and merely believing we did.
+ *
+ * The theme is seeded through `localStorage` rather than by clicking the
+ * toggle, which pins down a real coupling as a side effect: `index.html`'s
+ * anti-flash script reads `localStorage.getItem('theme')` and the shared bar's
+ * toggle writes `localStorage.setItem('theme', …)`. Both agree on `'theme'`;
+ * if either drifted, this boot fails on `data-theme` rather than quietly
+ * scanning dark twice.
+ *
+ * Structural defaults establish that the application mounted. A completed
+ * navigation alone would allow an empty, broken application to pass a scan.
+ */
+/**
+ * Shared setup. Runs before EVERY test that imports it, so an assertion here
+ * fails all of them at once, under whatever name those tests carry.
+ *
+ * SO THIS FUNCTION ASSERTS STRUCTURE AND NEVER PRODUCT COPY. On 2026-09-26
+ * crypto-lab-mceliece-gate changed one textarea's default string; its gate.ts
+ * still asserted the old sentence, boot() threw, both axe runs failed, the
+ * build job failed, the deploy was skipped, and deploy-sync reported the lab
+ * stale. The step that went red was called "Accessibility gate", and four of
+ * its six a11y tests had passed. For three days the live site served security
+ * claims that main had already corrected, and the one red thing in sight named
+ * the wrong subject.
+ *
+ * Structure: the control exists, the arrival panel is the one that ships,
+ * counts, [hidden]/toBeEmpty on lazily-rendered panels, a default matching a
+ * SHAPE (/^[0-9a-f]{64}$/). Copy: what a string SAYS — that belongs in
+ * e2e/claims.spec.ts, where a failure names copy as the subject.
+ */
+export async function boot(page: Page, theme: 'dark' | 'light' = 'dark'): Promise<void> {
+  page.setDefaultTimeout(20_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+  await page.goto('.');
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  await assertSingleBanner(page);
+  await assertListSemantics(page);
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('a.cl-skip-link')).toHaveAttribute('href', '#app');
+  await expect(page.locator('#app')).toHaveCount(1);
+  await expect(page.locator('#theme-toggle, #themeToggle, .theme-toggle, .theme-toggle-btn, [data-theme-toggle], #cl-theme-toggle')).toHaveCount(0);
+  await expect(page.locator('[role="tab"]')).toHaveCount(6);
+  await expect(page.locator('#app .panel')).toHaveCount(1);
+  await expect(page.locator('#app .panel')).not.toBeEmpty();
+  await expect(page.locator('#q')).toHaveValue('23');
+  await expect(page.locator('#N')).toHaveValue('365');
+  await expect(page.locator('#runs')).toHaveValue('100');
+  await expect(page.locator('#panel details[open]')).toHaveCount(0);
+  await settle(page);
+  await expectNotBlank(page, `${theme} first paint`);
 }
 
+/**
+ * WCAG 1.4.10 reflow: long evidence bytes, tables and controls must stay inside
+ * the document at 320px. Content clipped by an intentional scroll container
+ * does not count as document overflow.
+ */
 export async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
   const overflow = await page.evaluate(() => {
     const doc = document.documentElement;
@@ -160,7 +264,18 @@ export async function expectNoHorizontalOverflow(page: Page, label: string): Pro
   expect(overflow, `page must not scroll horizontally in state: ${label}`).toBeNull();
 }
 
-
+/**
+ * Every scrolling container must be operable from the keyboard (WCAG 2.1.1).
+ * If it holds no focusable content it needs `tabindex="0"`, so it becomes a
+ * focus target arrow keys can then scroll.
+ *
+ * This lab currently avoids scrollers on purpose — long hex wraps via
+ * `overflow-wrap: anywhere` — so the assertion is usually vacuous here. It
+ * runs at every state anyway, because the requirement MATERIALISES the moment
+ * someone reaches for `overflow-x: auto` on a wide value or table (the
+ * stylesheet already carries an unused `.table-wrap` rule inviting exactly
+ * that), and a scroller born without a keyboard route is invisible to axe.
+ */
 export async function expectScrollersReachable(page: Page, label: string): Promise<void> {
   const unreachable = await page.evaluate(() => {
     const FOCUSABLE = 'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])';
@@ -183,7 +298,21 @@ export async function expectScrollersReachable(page: Page, label: string): Promi
   ).toEqual([]);
 }
 
-
+/**
+ * Nothing may be focusable while it paints nothing (WCAG 2.4.3 / 2.4.7).
+ *
+ * `opacity: 0` with `pointer-events: none` is NOT hiding: the element keeps
+ * `tabIndex: 0`, so a keyboard reader tabs to a control that is not on screen
+ * and the focus ring lands nowhere. `display: none` and `visibility: hidden`
+ * DO remove an element from the tab order, so those are skipped rather than
+ * flagged — the failure is specifically the invisible-but-tabbable pair. The
+ * `hidden` tabpanels here take the `display: none` route, which is why five
+ * panels' worth of buttons are legitimately absent from the tab order.
+ *
+ * Off-screen-but-focusable is the WCAG-sanctioned skip-link idiom and is
+ * deliberately not flagged: the shared skip link parks at `top:-3rem` with
+ * full opacity and slides in on focus. The drive scans it focused.
+ */
 export async function expectNoInvisibleFocusTargets(page: Page, label: string): Promise<void> {
   const bad = await page.evaluate(() => {
     const FOCUSABLE = 'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex="-1"])';
@@ -215,7 +344,16 @@ export async function expectNoInvisibleFocusTargets(page: Page, label: string): 
   expect(bad, `focusable elements that paint nothing in state: ${label}`).toEqual([]);
 }
 
-
+/**
+ * When `A11Y_COLLECT` is set, `scan` records failures instead of throwing.
+ *
+ * A strict gate reports the first failing assertion in the first failing state
+ * and stops, so a page with defects in several states needs one full run per
+ * defect to enumerate them. The collection pass turns that into a single run.
+ * It is a debugging aid only: `A11Y_COLLECT` is never set in CI, and a run
+ * with it set prints every finding as it happens and then fails at the end, so
+ * a green collection run cannot be mistaken for a green gate.
+ */
 const COLLECTING = !!process.env.A11Y_COLLECT;
 const collected: string[] = [];
 
@@ -239,7 +377,12 @@ export function softExpect(actual: unknown, message: string, expected: unknown):
   }
 }
 
-
+/**
+ * Fail the test if the collection pass recorded anything. Without this a
+ * collection run would end green, and a green collection run is
+ * indistinguishable from a green gate — which is the exact confusion the whole
+ * exercise exists to remove.
+ */
 export function reportCollected(): void {
   if (!COLLECTING) return;
   expect(collected, `A11Y_COLLECT recorded ${collected.length} failure(s)`).toEqual([]);
@@ -256,7 +399,28 @@ async function soft(fn: () => Promise<void>): Promise<void> {
   }
 }
 
-
+/**
+ * WCAG 1.4.11 and generated content, ratcheted against a per-repo baseline.
+ *
+ * Neither class has ANY other oracle: axe has no rule for non-text contrast,
+ * and the arithmetic text walk cannot reach a control's boundary or a
+ * `::before` glyph, because a pseudo-element is not an element and owns no
+ * text node.
+ *
+ * IT IS CALLED FROM `scan()`, deliberately and not by accident. Fleet-wide
+ * this oracle had been called from inside a soft wrapper AFTER its
+ * `if (!COLLECTING) return` guard — so in a strict run, which is every run in
+ * CI and every run anyone reads as a pass, the guard returned first and
+ * `nontext.ts` never executed at all. Thirteen repos certified themselves
+ * clean on an oracle that had never looked. Calling it here means it runs at
+ * every driven state, including `:hover`, and this repo's baseline was
+ * captured by that live path.
+ *
+ * A check that merely logs is not a gate, so it ratchets: anything NOT in the
+ * baseline fails, anything in the baseline that got WORSE fails, and anything
+ * in the baseline that has been FIXED fails until its entry is deleted. That
+ * last rule is what stops the allowlist becoming a permanent exemption.
+ */
 const nonTextSeen = new Set<string>();
 
 export async function expectNoNewNonTextFailures(page: Page, label: string): Promise<void> {
@@ -283,7 +447,13 @@ export async function expectNoNewNonTextFailures(page: Page, label: string): Pro
   expect(problems, `new or worsened non-text contrast in state: ${label}`).toEqual([]);
 }
 
-
+/**
+ * Fail if a baselined finding never appeared during the whole drive.
+ *
+ * It has either been fixed — in which case delete the entry, which is the
+ * point — or the drive stopped reaching the state that shows it, which is a
+ * coverage regression worth knowing about. Call once, after `driveAllStates`.
+ */
 export function expectBaselineNotStale(): void {
   const unseen = Object.keys(NONTEXT_BASELINE).filter((k) => !nonTextSeen.has(k));
   expect(
@@ -292,7 +462,31 @@ export function expectBaselineNotStale(): void {
   ).toEqual([]);
 }
 
-
+/**
+ * Scan the page as it currently stands.
+ *
+ * Nine assertions, because axe's `violations` array alone is not a complete
+ * oracle:
+ *
+ *  - reduced-motion end state — see `expectNotBlank`.
+ *  - `violations` — the usual WCAG A/AA rule failures, plus four landmark
+ *    best-practice rules `withTags` does not run on its own.
+ *  - `incomplete` — axe's "could not decide" bucket, which never reaches the
+ *    violations array. The one rule id allowed to remain incomplete is
+ *    `color-contrast`, and only because the next assertion computes those
+ *    ratios arithmetically, including mixed colours and translucent fills.
+ *    Other incomplete results must be resolved rather than silently dropped.
+ *  - arithmetic contrast — composite-aware WCAG 1.4.3 over every text node.
+ *  - the same walk over `aria-hidden` content with the exemption lifted —
+ *    SC 1.4.3 is about what a reader SEES; see `contrast.ts` for what this
+ *    lab hides and why it is measured anyway.
+ *  - non-text contrast and generated content — SC 1.4.11, ratcheted; see
+ *    `expectNoNewNonTextFailures`. This is the only oracle that judges a
+ *    control's boundary against the surface OUTSIDE it.
+ *  - keyboard reachability of scrolling regions — WCAG 2.1.1.
+ *  - no focusable element that paints nothing — WCAG 2.4.3/2.4.7.
+ *  - reflow — WCAG 1.4.10, which axe has no rule for at all.
+ */
 export async function scan(page: Page, label: string): Promise<void> {
   await settle(page);
   await expectNotBlank(page, label);
@@ -307,11 +501,7 @@ export async function scan(page: Page, label: string): Promise<void> {
   // exactly like a full A/AA pass. For scale, `withTags(TAGS)` selects 69 of
   // axe-core 4.12's 105 rule definitions; the chained form executes 4.
   //
-  // The landmark four are still wanted because they are best-practice rather
-  // than WCAG-tagged, so `withTags` alone does not reach them — and this page
-  // has the shape they catch: a sticky `<header role="banner">` above a
-  // `<div id="app">` holding an `<aside class="cl-hero-why">`, two `<nav>`s
-  // (the shared actions and the tablist wrapper), one `<main>` and a footer.
+  // Landmark best-practice rules need a separate run from the WCAG tags.
   const wcag = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const landmarks = await new AxeBuilder({ page })
     .withRules([
@@ -370,3 +560,6 @@ export async function scan(page: Page, label: string): Promise<void> {
   await soft(() => expectNoHorizontalOverflow(page, label));
 }
 
+// ── The drive ───────────────────────────────────────────────────────────────
+
+/** Switch to a tab by clicking it, and prove the switch happened. */

@@ -45,3 +45,9 @@ export function verifyCascade(
  const h2A=h2Hash(a.blocks,bits,mode),h2B=h2Hash(b.blocks,bits,mode);
  return {valid:distinct&&h1A===h1B&&h1A===expectedH1&&h2A===h2B&&h2A===expectedH2,distinct,h1A,h1B,h2A,h2B,paddingBlock:lengthBlock(a.blocks.length)};
 }
+
+/** Semantic type is checked independently of the attack's g() branching. */
+export function verifyMeaningful(a:string,b:string,t:number){
+ const check=verifyCollision(a,b,t);
+ return {...check,valid:check.valid&&a.includes('Alice is dismissed')&&b.includes('I recommend Alice')};
+}
