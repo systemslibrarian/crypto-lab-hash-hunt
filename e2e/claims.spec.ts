@@ -25,14 +25,21 @@ async function openMulti(page:Page,bits:number, forks:number, mode:'iterated'|'w
  await page.locator('#multi-mode').selectOption(mode);
 }
 
+// Completion includes explicit rejection. A rejected computation must fail the
+// owning result assertion, rather than consuming the whole test timeout.
+async function completedEvidence(page:Page,selector:string){
+ await expect.poll(async()=>page.locator(selector+', #multi-out .verdict.warn').count(),{timeout:20_000}).toBeGreaterThan(0);
+ expect(await page.locator(selector).count(),'the completed computation must publish the expected verified evidence').toBe(1);
+}
+
 async function buildForks(page:Page){
  await page.getByRole('button',{name:'Build the forks'}).click();
- await expect(page.locator('[data-verdict="multi-forks"]')).toBeVisible({timeout:60_000});
+ await completedEvidence(page,'[data-verdict="multi-forks"]');
 }
 
 async function runCascade(page:Page){
  await page.getByRole('button',{name:'Find an H1‖H2 collision'}).click();
- await expect(page.locator('#multi-cost')).toBeVisible({timeout:20_000});
+ await completedEvidence(page,'#multi-cost');
 }
 
 test('multicollision forks chain from each verified next state',async({page})=>{
@@ -47,7 +54,7 @@ test('multicollision forks chain from each verified next state',async({page})=>{
 });
 
 test('toy Merkle-Damgard display includes the encoded length block',async({page})=>{
- await openMulti(page,11,4);await buildForks(page);await page.getByRole('button',{name:'Enumerate',exact:true}).click();await expect(page.locator('#multi-enumeration-evidence')).toBeVisible({timeout:60_000});
+ await openMulti(page,11,4);await buildForks(page);await page.getByRole('button',{name:'Enumerate',exact:true}).click();await completedEvidence(page,'#multi-enumeration-evidence');
  const blocks=await page.locator('.multi-fork').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-left')!));
  const padding=page.locator('.multi-padding');await expect(padding).toHaveAttribute('data-padding-block','PB:4');
  expect(Number(await padding.getAttribute('data-h1'))).toBe(toyMd(blocks,11,'h1'));
@@ -55,7 +62,7 @@ test('toy Merkle-Damgard display includes the encoded length block',async({page}
 
 test('enumeration maps every mask to its displayed fork choices',async({page})=>{
  await openMulti(page,9,6);await buildForks(page);await page.getByRole('button',{name:'Enumerate',exact:true}).click();
- const evidence=page.locator('#multi-enumeration-evidence');await expect(evidence).toHaveAttribute('data-complete','true',{timeout:60_000});
+ const evidence=page.locator('#multi-enumeration-evidence');await completedEvidence(page,'#multi-enumeration-evidence');await expect(evidence).toHaveAttribute('data-complete','true');
  expect(Number(await evidence.getAttribute('data-total'))).toBe(64);expect(Number(await evidence.getAttribute('data-verified'))).toBe(64);expect(Number(await evidence.getAttribute('data-distinct'))).toBe(64);
  const choices=await page.locator('.multi-fork').evaluateAll(nodes=>nodes.map(node=>({left:node.getAttribute('data-left')!,right:node.getAttribute('data-right')!})));
  const rows=page.locator('[data-multi-message]');await expect(rows).toHaveCount(64);
