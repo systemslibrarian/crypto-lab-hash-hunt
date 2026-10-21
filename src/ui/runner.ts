@@ -8,7 +8,7 @@ export class Runner {
  cancel():void{this.generation++;this.worker?.terminate();this.worker=null;this.reject?.(new Error('Cancelled'));this.reject=null;}
  async run<T>(name:string,args:Record<string,unknown>,progress:Progress=()=>{}):Promise<T>{
   this.cancel();const id=this.generation;
-  try{this.worker=this.createWorker();}catch{this.notice.textContent='Degraded mode: workers unavailable. The bounded experiment runs on the main thread.';await new Promise(r=>setTimeout(r,0));const value=await this.fallback(name,args,progress);if(id!==this.generation)throw Error('Cancelled');return value as T;}
+  try{this.worker=this.createWorker();}catch{this.notice.textContent='Degraded mode: workers unavailable. The bounded experiment runs on the main thread.';await new Promise(r=>setTimeout(r,0));if(id!==this.generation)throw Error('Cancelled');try{const value=await this.fallback(name,args,value=>{if(id===this.generation)progress(value);});if(id!==this.generation)throw Error('Cancelled');return value as T;}catch(error){if(id!==this.generation)throw Error('Cancelled');throw error;}}
   return new Promise<T>((resolve,reject)=>{this.reject=reject;this.worker!.onerror=e=>{if(id!==this.generation)return;this.worker?.terminate();this.worker=null;this.reject=null;reject(new Error('Worker failed: '+e.message));};this.worker!.onmessage=({data})=>{if(id!==this.generation)return;if(data.progress!==undefined){progress(data.progress);return;}this.worker?.terminate();this.worker=null;this.reject=null;if(data.error)reject(new Error(data.error));else resolve(data.result as T);};this.worker!.postMessage({name,args});});
  }
 }

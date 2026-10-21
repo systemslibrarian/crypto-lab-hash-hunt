@@ -92,3 +92,6 @@ The table prints choices in stage order, matching the displayed blocks. New sear
 retire the previous chain immediately. Independent verification now binds each fork
 to its predecessor and each message to its stated mask, and checks complete-set counts.
 Mutation replay reads structured test results and rejects crashes or setup failures.
+
+Cancellation in degraded mode is checked before computation starts and on every
+progress update or error, so a retired run cannot replace a newer result.
