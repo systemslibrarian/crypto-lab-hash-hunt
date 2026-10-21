@@ -4,3 +4,21 @@
 .letter{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background-color:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:.85rem;line-height:1.65}
 
 .letter mark{background-color:#f3ca72;color:#0b1512;border-radius:2px;padding:0 .06em}
+
+/* Tab 7: Joux multicollisions. Every branch is measured; motion is unnecessary. */
+.multi-lead{font-size:1.05rem;color:var(--text-dim)}
+.multi-fork-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:.75rem;margin:1rem 0}
+.multi-fork{min-width:0;padding:.85rem;border:1px solid var(--alarm);border-radius:9px;background-color:#261e1d;overflow-wrap:anywhere}
+.multi-fork>strong,.multi-fork>small,.multi-cv{display:block}
+.multi-fork>strong{color:var(--alarm);margin-top:.5rem}
+.multi-fork>small,.multi-cv{color:var(--text-dim)}
+.multi-branches{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.25rem .45rem;align-items:center;margin:.55rem 0}
+.multi-branches code{min-width:0;overflow-wrap:anywhere}
+.multi-branches span{color:var(--alarm);font-weight:700}
+.multi-padding{padding:.8rem;border-left:3px solid var(--accent);background-color:var(--bg)}
+.multi-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:.55rem;padding:0;list-style:none}
+.multi-checks li{padding:.65rem .75rem;border:1px solid var(--good);border-radius:7px;background-color:#182d21;color:var(--good)}
+.multi-checks li[data-result='fail']{border-color:var(--alarm);background-color:#30201f;color:var(--alarm)}
+.multi-no-hit{padding:.8rem;border:1px solid var(--warn);border-radius:7px;background-color:#302819;color:var(--warn)}
+#multi-out td.mono{max-width:36rem;overflow-wrap:anywhere}
+@media(max-width:640px){.multi-fork-strip,.multi-checks{grid-template-columns:1fr}.multi-branches{grid-template-columns:minmax(0,1fr) auto}}

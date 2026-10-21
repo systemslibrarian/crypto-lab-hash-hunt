@@ -4,7 +4,7 @@ Generic hash attacks · birthday · Floyd · time–memory tradeoffs
 
 ## What It Is
 
-A browser laboratory that deliberately shortens SHA-256, then runs real generic attacks on the shortened output. Find collisions, produce meaningfully different colliding letters, transfer a real HMAC tag between them, and compare exhaustive search, full lookup, Hellman chains and rainbow chains.
+A browser laboratory that deliberately shortens SHA-256, then runs real generic attacks on the shortened output. Find collisions, produce meaningfully different colliding letters, transfer a real HMAC tag between them, and compare exhaustive search, full lookup, Hellman chains and rainbow chains. A length-strengthened toy Merkle–Damgård construction then chains real compression collisions into 2^b messages and applies Joux’s attack to H1‖H2. This is a teaching demo, not production cryptography, and it does not attack full SHA-256.
 
 Built to the [Crypto Lab master template](https://github.com/systemslibrarian/crypto-lab/blob/main/audits/_MASTER-TEMPLATE.md). The original brief is included. Shared fleet UI and accessibility machinery derives from MIT-licensed work by Paul Clark.
 
@@ -15,6 +15,7 @@ Built to the [Crypto Lab master template](https://github.com/systemslibrarian/cr
 3. **Meaningful forgery:** two piles or Floyd over an injective letter map. An isolated employer closure signs the dismissal's shortened digest; WebCrypto verifies that tag on the recommendation and rejects a modified tag. Word choices are highlighted; Floyd exposes recorded walk steps.
 4. **Chained tables:** actual Hellman/rainbow reductions, endpoint storage, regeneration, false alarms, coverage, online costs and reachable-target hit rates.
 5. **Salt experiment:** precompute before drawing fresh salts; distinguish bucket matches, verified preimages, and original passwords.
+6. **Multicollisions:** chained compression collisions, 2^b same-digest messages, and an H1‖H2 collision measured against the naive cost.
 
 ## When to Use It
 
@@ -22,7 +23,7 @@ Teach generic attack costs and the limits of composition. This attacks tiny outp
 
 ## Live Demo
 
-[Hash Hunt](https://systemslibrarian.github.io/crypto-lab-hash-hunt/). Publication follows the complete correctness, browser, accessibility and mutation gate.
+[Hash Hunt](https://systemslibrarian.github.io/crypto-lab-hash-hunt/). Build collision forks, enumerate their messages, flip one fork, and compare a measured H1‖H2 break with the naive 2n-bit birthday cost. Publication follows the complete correctness, browser, accessibility and mutation gate.
 
 ## What Can Go Wrong
 
@@ -32,13 +33,14 @@ Teach generic attack costs and the limits of composition. This attacks tiny outp
 - Hellman's roughly 0.63 model requires the stated parameter relation and heuristic independence. Rainbow's recurrence is a random-function model, not a measured success rate.
 - Matching endpoints still require regeneration and verification. Diagnostic coverage/merge sets consume extra temporary memory.
 - Salts prevent mapping reuse, not per-user guessing. At 12 bits, accidental valid table answers and multiple preimages are possible.
+- Joux multicollisions are not second-preimage attacks. Kelsey–Schneier long-message second-preimage techniques remain out of scope, and no result on this page breaks real SHA-256.
 - Runtime caps may stop a search. Input changes retire old results; cancellation terminates the worker. Bounded fallback can occupy the main thread if workers cannot be created.
 
 ## Real-World Usage
 
 The birthday principle motivates hash lengths. Time–memory tradeoffs explain historical password precomputation, while salts and expensive password hashing address different costs. A shortened hash before a MAC can defeat an otherwise sound MAC construction.
 
-Primary references: Katz–Lindell third edition §§6.4, 6.6.3 and Appendix A.4; [Hellman (1980)](https://www-ee.stanford.edu/~hellman/publications/36.pdf); [Avoine, Junod and Oechslin](https://crypto.junod.info/jacm08.pdf); [Yuval (1979)](https://doi.org/10.1080/0161-117991854025); [FIPS 180-4](https://csrc.nist.gov/pubs/fips/180-4/upd1/final); [RFC 4231](https://www.rfc-editor.org/rfc/rfc4231.html).
+Primary references: Katz–Lindell third edition §§6.4, 6.6.3 and Appendix A.4; [Boneh–Shoup v0.6 §8.4](https://toc.cryptobook.us/book.pdf); [Joux (CRYPTO 2004)](https://doi.org/10.1007/978-3-540-28628-8_19); [Hellman (1980)](https://www-ee.stanford.edu/~hellman/publications/36.pdf); [Avoine, Junod and Oechslin](https://crypto.junod.info/jacm08.pdf); [Yuval (1979)](https://doi.org/10.1080/0161-117991854025); [FIPS 180-4](https://csrc.nist.gov/pubs/fips/180-4/upd1/final); [RFC 4231](https://www.rfc-editor.org/rfc/rfc4231.html).
 
 ## How to Run Locally
 
@@ -65,15 +67,15 @@ npm run test:e2e
 npm run test:mutations
 ```
 
-21 unit tests cover SHA-256, all truncation widths, RFC 4231's long-key/long-data HMAC example, Floyd predecessors, independently checked collisions, meaningful methods, chain inversion, salt timing and import boundaries. The exact 163-byte NIST CAVP LongMsg fixture and provenance are in `src/hash/sha256-longmsg-1304.json`. The official ZIP was inaccessible locally; a preserved NIST response file from TclTLS was independently checked with platform SHA-256. No current-ZIP comparison or coverage percentage is claimed.
+26 unit tests cover SHA-256, all truncation widths, RFC 4231's long-key/long-data HMAC example, Floyd predecessors, independently checked collisions, meaningful methods, chain inversion, salt timing, complete and sampled Joux fork enumeration, both H2 cascade modes, exact call accounting and import boundaries. The exact 163-byte NIST CAVP LongMsg fixture and provenance are in `src/hash/sha256-longmsg-1304.json`. The official ZIP was inaccessible locally; a preserved NIST response file from TclTLS was independently checked with platform SHA-256. No current-ZIP comparison or coverage percentage is claimed.
 
-Eight browser claims use Node SHA-256 to recheck displayed inputs and recovered preimages. Eleven mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises real controls at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
+Seventeen browser claims use Node SHA-256 to recheck displayed inputs, recovered preimages, every fork transition, sampled multicollision messages, both H2 modes, the final H1‖H2 pair, cost sums and extrapolation. Twenty mutations must pass baseline, build, move bundle bytes, fail a named test, restore, and pass again. Accessibility exercises every multicollision state at 1280/320 pixels with the unchanged fleet contrast/non-text oracles. Browser QA runs in CI when supported local browser control is unavailable.
 
 Pages, PRs and grouped Dependabot auto-merge use the entire gate; automated merges explicitly dispatch deployment.
 
 ## Performance
 
-A measured hash calibration sets a 12–24-bit interaction cap. Searches also enforce time/evaluation limits; letter hashes can be slower. Counts exclude independent verification. Chain construction is capped at one million hashes. Timings describe this browser, not production-size SHA-256.
+A measured hash calibration sets a 12–24-bit interaction cap. Searches also enforce time/evaluation limits; letter hashes can be slower. Counts exclude independent verification. Multicollision costs count each H1 compression and H2 evaluation, while naive work above the two-million-call budget is explicitly extrapolated from the measured rate. Chain construction is capped at one million hashes. Timings describe this browser, not production-size SHA-256.
 
 The Crypto Lab catalog integration records this lab’s concept, level, source evidence and fleet automation. Playwright port 4225 is unique across all 223 registered configurations; strictPort is enforced and existing servers are never reused.
 

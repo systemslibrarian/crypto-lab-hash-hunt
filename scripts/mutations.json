@@ -75,5 +75,68 @@
     "anchor": "crypto.subtle.verify('HMAC',key,tag,hashBytes(message,t))",
     "replacement": "Boolean(tag.length && (await crypto.subtle.sign('HMAC',key,hashBytes(message,t))).byteLength)",
     "test": "meaningful forgery"
+  },
+  {
+    "name": "next fork reuses the prior chaining value",
+    "file": "src/attack/joux.ts",
+    "anchor": "    chainingValue = nextCv;",
+    "replacement": "    chainingValue = inputCv;",
+    "test": "multicollision forks chain from each verified next state"
+  },
+  {
+    "name": "enumeration reads the next fork bit",
+    "file": "src/attack/joux.ts",
+    "anchor": "((mask >> index) & 1 ? fork.right : fork.left)",
+    "replacement": "((mask >> ((index + 1) % forks.length)) & 1 ? fork.right : fork.left)",
+    "test": "enumeration maps every mask to its displayed fork choices"
+  },
+  {
+    "name": "cascade accepts the first prior message without matching H2",
+    "file": "src/attack/joux.ts",
+    "anchor": "    const previous = seen.get(h2);",
+    "replacement": "    const previous = seen.size > 0 ? [...seen.values()][0] : undefined;",
+    "test": "cascade pair independently collides under H1 and H2"
+  },
+  {
+    "name": "Merkle-Damgard omits the encoded length block",
+    "file": "src/md/toyMd.ts",
+    "anchor": "  return toyCompress(tag, chainingValue, lengthBlock(blocks.length), bits, digest);",
+    "replacement": "  return chainingValue;",
+    "test": "toy Merkle-Damgard display includes the encoded length block"
+  },
+  {
+    "name": "reported cost skips H2 calls",
+    "file": "src/attack/joux.ts",
+    "anchor": "    h2Calls,",
+    "replacement": "    h2Calls: 0,",
+    "test": "cascade compression-call parts sum and include every H2 evaluation"
+  },
+  {
+    "name": "naive birthday exponent uses all 2n bits",
+    "file": "src/attack/joux.ts",
+    "anchor": "2 ** ((bits + bits) / 2)",
+    "replacement": "2 ** (bits + bits)",
+    "test": "naive 2n-bit comparison uses the birthday exponent and measured rate"
+  },
+  {
+    "name": "fork flip keeps the original message mask",
+    "file": "src/main.ts",
+    "anchor": "afterMask=1<<(fork-1)",
+    "replacement": "afterMask=beforeMask",
+    "test": "flipping one displayed fork changes the message without moving H1"
+  },
+  {
+    "name": "negative concatenation claim is removed",
+    "file": "src/main.ts",
+    "anchor": "Concatenating these two hashes does not double the collision work: a 2n-bit H1‖H2 here falls to about b·2^(n/2) compression calls with b ≈ n/2 forks.",
+    "replacement": "Limitation text removed by the mutation runner.",
+    "test": "cascade pair independently collides under H1 and H2"
+  },
+  {
+    "name": "negative-claim evidence paints the cost check red",
+    "file": "src/main.ts",
+    "anchor": "const lengthPresent=check.paddingBlock===result.chain.paddingBlock,costAdvantage=result.naive.expectedCalls>result.totalCalls;",
+    "replacement": "const lengthPresent=check.paddingBlock===result.chain.paddingBlock,costAdvantage=false&&result.naive.expectedCalls>result.totalCalls;",
+    "test": "cascade pair independently collides under H1 and H2"
   }
 ]

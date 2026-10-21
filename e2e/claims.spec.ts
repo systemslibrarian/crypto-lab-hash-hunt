@@ -10,3 +10,91 @@ test('salted recovered preimages verify independently and retain the negative cl
 test('invalid controls refuse a result and tabs retire the old experiment',async({page})=>{await boot(page);await page.locator('#q').fill('0');await page.getByRole('button',{name:'Run the birthday room'}).click();await expect(page.locator('#birthday-out')).toContainText('Input refused');await page.getByRole('tab',{name:/Birthday room/}).focus();await page.keyboard.press('ArrowRight');await expect(page.getByRole('tab',{name:/Collision hunt/})).toHaveAttribute('aria-selected','true');await expect(page.locator('#birthday-out')).toHaveCount(0);});
 
 test('near miss verifier refuses equal first 8 bits at width 9',async({page})=>{await boot(page);await page.getByRole('tab',{name:/Collision hunt/}).click();await page.getByRole('button',{name:'Verify the 9-bit near miss'}).click();expect(shortened('verification-control:16',8)).toBe(shortened('verification-control:18',8));expect(shortened('verification-control:16',9)).not.toBe(shortened('verification-control:18',9));await expect(page.locator('[data-verdict=near-miss]')).toContainText('NEAR MISS REJECTED');});
+
+const toyCompression=(tag:'h1'|'h2',cv:number,block:string,bits:number)=>shortened(tag+'|'+cv+'|'+block,bits);
+const toyMd=(blocks:string[],bits:number,tag:'h1'|'h2')=>{let cv=0;for(const block of blocks)cv=toyCompression(tag,cv,block,bits);return toyCompression(tag,cv,'PB:'+blocks.length,bits);};
+const wholeMessage=(blocks:string[])=>blocks.map(block=>Buffer.byteLength(block)+':'+block).join('|');
+const h2=(blocks:string[],bits:number,mode:string)=>mode==='iterated'?toyMd(blocks,bits,'h2'):shortened(wholeMessage(blocks),bits);
+
+async function openMulti(page:Page,bits:number, forks:number, mode:'iterated'|'whole'='iterated'){
+ await boot(page);
+ await expect(page.locator('#calibration')).toContainText(/Measured calibration|Calibration unavailable/);
+ await page.getByRole('tab',{name:/Multicollisions/}).click();
+ await page.locator('#multi-n').fill(String(bits));
+ await page.locator('#multi-b').fill(String(forks));
+ await page.locator('#multi-mode').selectOption(mode);
+}
+
+async function buildForks(page:Page){
+ await page.getByRole('button',{name:'Build the forks'}).click();
+ await expect(page.locator('[data-verdict="multi-forks"]')).toBeVisible({timeout:60_000});
+}
+
+async function runCascade(page:Page){
+ await page.getByRole('button',{name:'Find an H1‖H2 collision'}).click();
+ await expect(page.locator('#multi-cost')).toBeVisible({timeout:20_000});
+}
+
+test('multicollision forks chain from each verified next state',async({page})=>{
+ await openMulti(page,10,5);await buildForks(page);
+ const forks=await page.locator('.multi-fork').all();expect(forks).toHaveLength(5);
+ let expectedInput=0;
+ for(const [index,fork] of forks.entries()){
+  const stage=Number(await fork.getAttribute('data-stage')),input=Number(await fork.getAttribute('data-input-cv')),left=(await fork.getAttribute('data-left'))!,right=(await fork.getAttribute('data-right'))!,next=Number(await fork.getAttribute('data-next-cv'));
+  expect(stage).toBe(index+1);expect(input).toBe(expectedInput);expect(left).not.toBe(right);expect(toyCompression('h1',input,left,10)).toBe(next);expect(toyCompression('h1',input,right,10)).toBe(next);expectedInput=next;
+ }
+ await expect(page.locator('[data-verdict="multi-forks"]')).toContainText('Swapping one choice');
+});
+
+test('toy Merkle-Damgard display includes the encoded length block',async({page})=>{
+ await openMulti(page,11,4);await buildForks(page);await page.getByRole('button',{name:'Enumerate',exact:true}).click();await expect(page.locator('#multi-enumeration-evidence')).toBeVisible({timeout:60_000});
+ const blocks=await page.locator('.multi-fork').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-left')!));
+ const padding=page.locator('.multi-padding');await expect(padding).toHaveAttribute('data-padding-block','PB:4');
+ expect(Number(await padding.getAttribute('data-h1'))).toBe(toyMd(blocks,11,'h1'));
+});
+
+test('enumeration maps every mask to its displayed fork choices',async({page})=>{
+ await openMulti(page,9,6);await buildForks(page);await page.getByRole('button',{name:'Enumerate',exact:true}).click();
+ const evidence=page.locator('#multi-enumeration-evidence');await expect(evidence).toHaveAttribute('data-complete','true',{timeout:60_000});
+ expect(Number(await evidence.getAttribute('data-total'))).toBe(64);expect(Number(await evidence.getAttribute('data-verified'))).toBe(64);expect(Number(await evidence.getAttribute('data-distinct'))).toBe(64);
+ const choices=await page.locator('.multi-fork').evaluateAll(nodes=>nodes.map(node=>({left:node.getAttribute('data-left')!,right:node.getAttribute('data-right')!})));
+ const rows=page.locator('[data-multi-message]');await expect(rows).toHaveCount(64);
+ for(const index of [Math.floor(64*.37),Math.floor(64*.73)]){const row=rows.nth(index),mask=Number(await row.getAttribute('data-mask')),blocks=JSON.parse((await row.getAttribute('data-blocks'))!) as string[],shown=Number(await row.getAttribute('data-h1'));expect(blocks).toEqual(choices.map((choice,bit)=>((mask>>bit)&1)?choice.right:choice.left));expect(toyMd(blocks,9,'h1')).toBe(shown);}
+});
+
+test('flipping one displayed fork changes the message without moving H1',async({page})=>{
+ await openMulti(page,12,6);await buildForks(page);
+ let evidence=page.locator('#multi-flip-evidence');
+ for(let fork=1;fork<=6;fork++){await page.locator('#multi-flip-index').fill(String(fork));await page.getByRole('button',{name:'Flip selected fork'}).click();await expect(evidence).toBeVisible();const before=JSON.parse((await evidence.getAttribute('data-before-blocks'))!) as string[],after=JSON.parse((await evidence.getAttribute('data-after-blocks'))!) as string[];expect(before).not.toEqual(after);expect(after.filter((block,index)=>block!==before[index])).toHaveLength(1);expect(Number(await evidence.getAttribute('data-after-mask'))).toBe(1<<(fork-1));expect(Number(await evidence.getAttribute('data-h1-before'))).toBe(Number(await evidence.getAttribute('data-h1-after')));if(await evidence.getAttribute('data-h2-before')!==await evidence.getAttribute('data-h2-after'))break;if(fork===6)throw Error('All six independent H2 flip controls collided unexpectedly');}
+});
+
+test('cascade pair independently collides under H1 and H2',async({page})=>{
+ await openMulti(page,14,9);let evidence=page.locator('#multi-negative-evidence');for(let attempt=0;attempt<3;attempt++){await runCascade(page);if(await evidence.count())break;}await expect(evidence).toHaveAttribute('data-evidence-green','true');
+ const a=JSON.parse((await evidence.getAttribute('data-a-blocks'))!) as string[],b=JSON.parse((await evidence.getAttribute('data-b-blocks'))!) as string[];expect(a).not.toEqual(b);expect(toyMd(a,14,'h1')).toBe(toyMd(b,14,'h1'));expect(h2(a,14,'iterated')).toBe(h2(b,14,'iterated'));
+ for(const check of await evidence.locator('[data-check]').all())expect(await check.getAttribute('data-result')).toBe('pass');
+ await expect(page.locator('[data-verdict="multi-cascade"]')).toContainText('2n-BIT DIGEST — b·2^(n/2) WORK');
+ await expect(page.locator('[data-verdict="multi-cascade"]')).toContainText('does not double the collision work');
+ await page.getByText('Construction, source boundary, and non-goals',{exact:true}).click();await expect(page.getByText('What this is not:',{exact:false})).toBeVisible();await expect(page.getByText('real SHA-256 is not attacked',{exact:false})).toBeVisible();await expect(page.getByText('second-preimage attacks remain out of scope',{exact:false})).toBeVisible();
+});
+
+test('whole-message H2 toggle still verifies the displayed concatenation collision',async({page})=>{
+ await openMulti(page,8,9,'whole');await runCascade(page);
+ const evidence=page.locator('#multi-negative-evidence');await expect(evidence).toBeVisible();const a=JSON.parse((await evidence.getAttribute('data-a-blocks'))!) as string[],b=JSON.parse((await evidence.getAttribute('data-b-blocks'))!) as string[];expect(a).not.toEqual(b);expect(toyMd(a,8,'h1')).toBe(toyMd(b,8,'h1'));expect(h2(a,8,'whole')).toBe(h2(b,8,'whole'));await expect(evidence).toContainText('existing non-iterated whole-message hash');
+});
+
+test('cascade compression-call parts sum and include every H2 evaluation',async({page})=>{
+ await openMulti(page,9,10);await runCascade(page);
+ const cost=page.locator('#multi-cost'),h1Calls=Number(await cost.getAttribute('data-h1-calls')),h2Calls=Number(await cost.getAttribute('data-h2-calls')),total=Number(await cost.getAttribute('data-total-calls')),candidates=Number(await cost.getAttribute('data-candidate-count'));
+ expect(h2Calls).toBe(candidates*11);expect(total).toBe(h1Calls+h2Calls);
+});
+
+test('naive 2n-bit comparison uses the birthday exponent and measured rate',async({page})=>{
+ await openMulti(page,19,1);await runCascade(page);
+ const cost=page.locator('#multi-cost');await expect(cost).toHaveAttribute('data-naive-kind','extrapolated');
+ const evaluations=Number(await cost.getAttribute('data-naive-expected-evaluations')),calls=Number(await cost.getAttribute('data-naive-expected-calls')),rate=Number(await cost.getAttribute('data-naive-rate')),seconds=Number(await cost.getAttribute('data-naive-seconds'));
+ expect(evaluations).toBeCloseTo(Math.sqrt(Math.PI/2)*2**19,10);expect(calls).toBeCloseTo(evaluations*4,8);expect(seconds).toBeCloseTo(calls/rate,10);
+});
+
+test('multicollision evidence retires on a changed input but not a no-op',async({page})=>{
+ await openMulti(page,9,5);await buildForks(page);const bits=page.locator('#multi-n');await bits.fill('9');await bits.dispatchEvent('input');await expect(page.locator('[data-verdict="multi-forks"]')).toBeVisible();await bits.fill('10');await expect(page.locator('[data-verdict="multi-forks"]')).toHaveCount(0);await expect(page.locator('#multi-out')).toContainText('Retired: inputs changed');expect(await page.locator('[hidden]').evaluateAll(nodes=>nodes.filter(node=>getComputedStyle(node).display!=='none').length)).toBe(0);
+});
