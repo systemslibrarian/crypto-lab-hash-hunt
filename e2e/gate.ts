@@ -211,7 +211,7 @@ export async function boot(page: Page, theme: 'dark' | 'light' = 'dark'): Promis
   await expect(page.locator('a.cl-skip-link')).toHaveAttribute('href', '#app');
   await expect(page.locator('#app')).toHaveCount(1);
   await expect(page.locator('#theme-toggle, #themeToggle, .theme-toggle, .theme-toggle-btn, [data-theme-toggle], #cl-theme-toggle')).toHaveCount(0);
-  await expect(page.locator('[role="tab"]')).toHaveCount(6);
+  await expect(page.locator('[role="tab"]')).toHaveCount(7);
   await expect(page.locator('#app .panel')).toHaveCount(1);
   await expect(page.locator('#app .panel')).not.toBeEmpty();
   await expect(page.locator('#q')).toHaveValue('23');

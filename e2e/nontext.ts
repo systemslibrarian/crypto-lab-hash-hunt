@@ -493,7 +493,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       // 1px a coloured state will later occupy so nothing shifts. This page
       // uses exactly that on `.tab-btn`, whose ACTIVE state fills the border
       // in with `--accent-ink`; counting the transparent spacer as a border
-      // would make the five unselected tabs — no fill, no painted edge,
+      // would make the six unselected tabs — no fill, no painted edge,
       // identified by their text alone, exactly the case the "is it trying to
       // draw itself as a control?" test below exists to exclude — report
       // 1.00:1 apiece.

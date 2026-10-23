@@ -141,3 +141,29 @@ test('partial-byte mask tooltip and required related labs are present',async({pa
  await boot(page);for(const slug of ['hash-zoo','dnssec-chain','feistel-forge','grover'])expect(await page.locator(`a[href="https://systemslibrarian.github.io/crypto-lab-${slug}/"]`).count()).toBe(1);
  await page.getByRole('tab',{name:/Collision hunt/}).click();await page.locator('#t').fill('9');expect(await page.locator('#t').getAttribute('title')).toContain('mask 0x80');expect(await page.locator('#t').getAttribute('title')).toContain('Measured cap:');await page.getByRole('tab',{name:/Chained tables/}).click();expect(await page.locator('#panel').innerText()).toContain('Bcrypt Forge’s Scenario B');
 });
+
+test('chosen names crowd the public hash table, with measured keyed comparison', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('tab', { name: 'Hash-table flood' }).click();
+  await page.getByRole('button', { name: 'Compare the same record names' }).click();
+  const panel = page.locator('#flood-out');
+  await expect(panel).toContainText('Unkeyed slot visits');
+  await expect(panel).toContainText('Keyed slot visits');
+  await expect(panel.locator('.metric').filter({ hasText: 'Unkeyed slot visits' })).toContainText('300'); // 1 + ... + 24
+  await expect(panel.locator('tbody tr')).toHaveCount(8);
+  const rows = await panel.locator('tbody tr').all();
+  const names = new Set<string>();
+  const publicStart = (await rows[0].locator('td').nth(2).textContent())?.trim();
+  for (const [index, row] of rows.entries()) {
+    const cells = (await row.locator('td').allTextContents()).map((cell) => cell.trim());
+    expect(cells).toHaveLength(6);
+    expect(Number(cells[0])).toBe(index + 1);
+    names.add(cells[1]);
+    expect(cells[2]).toBe(publicStart);
+    expect(Number(cells[3])).toBe(index + 1);
+    expect(Number(cells[5])).toBeGreaterThanOrEqual(1);
+  }
+  expect(names.size).toBe(8);
+  await expect(page.getByRole('link', { name: /Rust's current HashMap documentation/ }))
+    .toHaveAttribute('href', 'https://doc.rust-lang.org/std/collections/struct.HashMap.html');
+});

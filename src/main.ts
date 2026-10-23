@@ -1,4 +1,5 @@
 import {variationWords,letter} from './attack/meaningful';
+import { ATTACKER_KEYS, TABLE_SIZE, compareFlood } from './attack/hashFlood';
 import './style.css';import {el,escape,field,select,table,metrics,verdict,mount,retirement,integer,setError,histogram} from './ui/ui';import {Runner} from './ui/runner';import {run} from './worker/tasks';import {birthday} from './math/birthday';import {employer} from './mac/hashAndMac';import {verifyCollision,verifyMeaningful} from './verify/verify';
 import {blocksForMask,type CascadeResult,type Enumeration,type JouxFork,type MulticollisionChain} from './attack/joux';import {h2Hash,toyMd,type H2Mode} from './md/toyMd';
 let sharedBits=12,measuredMax=16;const createWorker=()=>new Worker(new URL('./worker/compute.worker.ts',import.meta.url),{type:'module'});
@@ -100,5 +101,50 @@ function multiPanel(panel:HTMLElement){
  void retire;
 }
 
-mount('Hash Hunt','Generic hash attacks · birthday · Floyd · time–memory tradeoffs','Shrink SHA-256’s output, find real collisions, chain multicollisions, forge a hash-and-MAC letter, and measure what structure changes.','Output length sets the price of generic attacks. The difference between a collision, a preimage and a recovered original matters when you read a security claim.',[{id:'birthday',label:'Birthday room',render:birthdayPanel},{id:'hunt',label:'Collision hunt',render:huntPanel},{id:'meaning',label:'Meaningful forgery',render:meaningfulPanel},{id:'tables',label:'Chained tables',render:tablesPanel},{id:'salt',label:'Salt experiment',render:saltPanel},{id:'multi',label:'Multicollisions',render:multiPanel}],[['Collision Vault','collision-vault'],['Babel Hash','babel-hash'],['Hash Zoo (compression internals)','hash-zoo'],['DNSSEC Chain (per-target dictionaries)','dnssec-chain'],['Feistel Forge (birthday on blocks)','feistel-forge'],['Grover (quantum collision bound)','grover'],['Bcrypt Forge','bcrypt-forge'],['KDF Arena','kdf-arena'],['Factor Forge','factor-forge'],['Log Forge','log-forge']]);
+function floodPanel(panel: HTMLElement) {
+  panel.innerHTML = `
+    <div class="eyebrow">08 / UNTRUSTED INPUTS IN A HASH TABLE</div>
+    <h2>Make a public bucket crowded</h2>
+    <p>An attacker who can choose ${ATTACKER_KEYS} record names searches for names that start in the same slot of a public, unkeyed table. Insertion then has to inspect more and more occupied slots. Keep those names and the table size fixed, but choose the start slots using a secret keyed hash.</p>
+    <div class="row"><button id="flood-run" class="primary">Compare the same record names</button></div>
+    <p class="note">${TABLE_SIZE} slots, ${ATTACKER_KEYS} inserts, linear probing in both runs. A fresh secret key is drawn locally for each comparison; no key or input is sent to a server.</p>
+    <div id="flood-out" class="result" role="status" aria-live="polite"></div>
+    <p class="callout"><strong>Teaching boundary.</strong> The public map is deliberately weak, exposed FNV-1a reduced to a bucket index. The keyed comparator is real WebCrypto HMAC-SHA-256, not an implementation of SipHash or a performance benchmark. The result measures slot visits in this toy table, not a denial-of-service exploit against a real server.</p>
+    <p class="note"><strong>Source.</strong> <a href="https://doc.rust-lang.org/std/collections/struct.HashMap.html">Rust's current HashMap documentation</a> explains keyed hashing against HashDoS and identifies SipHash 1-3 as its present default, subject to change. <a href="https://www.aumasson.jp/siphash/siphash.pdf">Aumasson and Bernstein's SipHash paper</a> describes the short-input keyed hash; this panel uses HMAC for its cryptographic comparator.</p>`;
+  const out = el('#flood-out', panel);
+  const button = el<HTMLButtonElement>('#flood-run', panel);
+  let generation = 0;
+  window.addEventListener('lab-retire', () => { generation++; }, { once: true });
+  button.onclick = async () => {
+    const current = ++generation;
+    button.disabled = true;
+    out.textContent = 'Searching candidate names and measuring both tables…';
+    try {
+      const secret = crypto.getRandomValues(new Uint8Array(32));
+      let result: Awaited<ReturnType<typeof compareFlood>>;
+      try {
+        result = await compareFlood(secret);
+      } finally {
+        secret.fill(0);
+      }
+      if (current !== generation || !out.isConnected) return;
+      out.innerHTML = metrics([
+        ['Candidate names tried', result.candidates],
+        ['Unkeyed slot visits', result.unkeyed.total],
+        ['Keyed slot visits', result.keyed.total],
+        ['Worst unkeyed insert', result.unkeyed.maximum],
+        ['Worst keyed insert', result.keyed.maximum],
+      ]) + `<p>All ${ATTACKER_KEYS} selected names start at public slot ${result.publicStart}. The keyed start slots vary with the secret. These are measured table operations for the <em>same inputs</em>, not work factors for breaking HMAC or SipHash.</p>` +
+        table(['Insert', 'Record name', 'Public start', 'Public probes', 'Keyed start', 'Keyed probes'],
+          result.keys.slice(0, 8).map((key, i) => [i + 1, key, result.publicStart, result.unkeyed.perInsert[i], result.keyedStarts[i], result.keyed.perInsert[i]]),
+          'First eight hash-table insertions') + '<p class="note">First eight insertions shown; totals include all 24.</p>';
+    } catch (error) {
+      if (current === generation && out.isConnected) setError(out, error);
+    } finally {
+      if (current === generation && button.isConnected) button.disabled = false;
+    }
+  };
+}
+
+mount('Hash Hunt','Generic hash attacks · birthday · Floyd · time–memory tradeoffs','Shrink SHA-256’s output, find real collisions, chain multicollisions, forge a hash-and-MAC letter, and measure what structure changes.','Output length sets the price of generic attacks. The difference between a collision, a preimage and a recovered original matters when you read a security claim.',[{id:'birthday',label:'Birthday room',render:birthdayPanel},{id:'hunt',label:'Collision hunt',render:huntPanel},{id:'meaning',label:'Meaningful forgery',render:meaningfulPanel},{id:'tables',label:'Chained tables',render:tablesPanel},{id:'salt',label:'Salt experiment',render:saltPanel},{id:'multi',label:'Multicollisions',render:multiPanel},{id:'flood',label:'Hash-table flood',render:floodPanel}],[['Collision Vault','collision-vault'],['Babel Hash','babel-hash'],['Hash Zoo (compression internals)','hash-zoo'],['DNSSEC Chain (per-target dictionaries)','dnssec-chain'],['Feistel Forge (birthday on blocks)','feistel-forge'],['Grover (quantum collision bound)','grover'],['Bcrypt Forge','bcrypt-forge'],['KDF Arena','kdf-arena'],['Factor Forge','factor-forge'],['Log Forge','log-forge']]);
 el('.cl-hero').insertAdjacentHTML('afterend','<p class="note" id="calibration" role="status">Measuring this browser’s short-message hash rate to set a conservative interaction cap…</p>');const calibration=el('#calibration');const calibrationRunner=new Runner(createWorker,run,calibration);calibrationRunner.run<{rate:number;maxBits:number}>('calibrate',{}).then(r=>{measuredMax=r.maxBits;calibration.textContent='Measured calibration: '+Math.round(r.rate).toLocaleString()+' short SHA-256 hashes/second. Interaction cap '+measuredMax+' bits; letter hashes can be slower. Attack counts exclude independent verification.';}).catch(()=>{calibration.textContent='Calibration unavailable; conservative 16-bit collision cap retained. Every run still has a time and evaluation cap.';});
