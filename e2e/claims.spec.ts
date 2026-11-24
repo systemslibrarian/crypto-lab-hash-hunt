@@ -167,3 +167,21 @@ test('chosen names crowd the public hash table, with measured keyed comparison',
   await expect(page.getByRole('link', { name: /Rust's current HashMap documentation/ }))
     .toHaveAttribute('href', 'https://doc.rust-lang.org/std/collections/struct.HashMap.html');
 });
+
+test('rounded birthday probabilities preserve possibility and certainty', async ({ page }) => {
+  await boot(page);
+  const output = page.locator('#birthday-out');
+  for (const [outputs, inputs, model, upper] of [
+    ['65536', '2', '<0.01%', '0.01%'],
+    ['256', '120', '>99.99%', '100.00%'],
+    ['256', '257', '100.00%', '100.00%'],
+  ]) {
+    await page.locator('#N').selectOption(outputs);
+    await page.locator('#q').fill(inputs);
+    await expect(output.locator('[data-model]')).toHaveCount(0);
+    await page.locator('#birthday').click();
+    await expect(output.locator('[data-model]')).toBeAttached();
+    await expect(output.locator('.metric').filter({ hasText: 'Exact model probability' })).toContainText(model);
+    await expect(output.locator('.metric').filter({ hasText: 'Union upper bound' })).toContainText(upper);
+  }
+});
