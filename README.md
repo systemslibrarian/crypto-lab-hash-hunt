@@ -79,7 +79,7 @@ Pages, PRs and grouped Dependabot auto-merge use the entire gate; automated merg
 
 A measured hash calibration sets a 12–24-bit interaction cap. Searches also enforce time/evaluation limits; letter hashes can be slower. Counts exclude independent verification. Multicollision costs count each H1 compression and H2 evaluation, while naive work above the two-million-call budget is explicitly extrapolated from the measured rate. Chain construction is capped at one million hashes. Timings describe this browser, not production-size SHA-256.
 
-The Crypto Lab catalog integration records this lab’s concept, level, source evidence and fleet automation. Playwright port 4225 is unique across all 223 registered configurations; strictPort is enforced and existing servers are never reused.
+The Crypto Lab catalog integration records this lab’s concept, level, source evidence and fleet automation. Playwright port 4225 is reserved for this lab in the fleet registry; strictPort is enforced and existing servers are never reused.
 
 ---
 
